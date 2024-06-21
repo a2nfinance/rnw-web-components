@@ -179,7 +179,7 @@
       <table class="invoice-table">
         <thead class="invoice-table-header">
           <tr>
-            <th scope="col"> Description </th>
+            <th scope="col"> Description View</th>
             <th scope="col"> Qty </th>
             <th scope="col"> Unit Price </th>
             <th scope="col"> Discount </th>

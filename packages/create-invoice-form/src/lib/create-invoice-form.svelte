@@ -12,6 +12,7 @@
   import { Modal, Button, Status } from "@requestnetwork/shared";
   import { getInitialFormData, prepareRequestParams } from "$utils";
   import type { RequestNetwork } from "@requestnetwork/request-client.js";
+    import { prepareConversionRequestParams } from "./utils/prepareRequest";
 
   export let config: IConfig;
   export let signer: string = "";
@@ -125,14 +126,34 @@
 
     formData.miscellaneous.builderId = activeConfig?.builderId || "";
     formData.miscellaneous.createdWith = window.location.hostname;
-
-    const requestCreateParameters = prepareRequestParams({
+    console.log("Original request params:")
+    console.log("Signer:", signer)
+    console.log("formData:", formData)
+    console.log("currency:", currency)
+    console.log("currencies:", currencies)
+    console.log("invoiceTotals:", invoiceTotals)
+    console.log("End");
+    // const requestCreateParameters = prepareRequestParams({
+    //   signer,
+    //   formData,
+    //   currency,
+    //   currencies,
+    //   invoiceTotals,
+    // });
+    const requestCreateParameters = prepareConversionRequestParams({
       signer,
       formData,
       currency,
       currencies,
       invoiceTotals,
     });
+
+    console.log("Prepared request params:")
+    console.log("Request Info:", requestCreateParameters.requestInfo)
+    console.log("Payment Network:", requestCreateParameters.paymentNetwork)
+    console.log("Content Data:", requestCreateParameters.contentData)
+    console.log("Signer:", requestCreateParameters.signer)
+    console.log("End");
 
     if (requestNetwork) {
       try {
