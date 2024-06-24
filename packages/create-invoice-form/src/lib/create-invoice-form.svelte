@@ -12,7 +12,7 @@
   import { Modal, Button, Status } from "@requestnetwork/shared";
   import { getInitialFormData, prepareRequestParams } from "$utils";
   import type { RequestNetwork } from "@requestnetwork/request-client.js";
-    import { prepareConversionRequestParams } from "./utils/prepareRequest";
+    import { prepareConversionRequestParams, prepareSwapToPayRequestParams } from "./utils/prepareRequest";
 
   export let config: IConfig;
   export let signer: string = "";
@@ -140,7 +140,7 @@
     //   currencies,
     //   invoiceTotals,
     // });
-    const requestCreateParameters = prepareConversionRequestParams({
+    const requestCreateParameters = prepareSwapToPayRequestParams({
       signer,
       formData,
       currency,
