@@ -1,37 +1,43 @@
 <script lang="ts">
   import {
-    Types,
-    type RequestNetwork,
-  } from "@requestnetwork/request-client.js";
-  import {
-    payRequest,
-    approveErc20,
-    hasErc20Approval,
-    UnsupportedNetworkError,
-    type IConversionPaymentSettings,
-    swapToPayRequest,
-    type ISwapSettings,
-    swapToPayAnyToErc20Request,
-  } from "@requestnetwork/payment-processor";
+      checkNetwork,
+      getDecimals,
+      getSymbol,
+      walletClientToSigner,
+  } from "$src/utils";
   import { getPaymentNetworkExtension } from "@requestnetwork/payment-detection";
   import {
-    Check,
-    Button,
-    Accordion,
-    formatDate,
-    calculateItemTotal,
-    getCurrenciesByNetwork,
+      Escrow,
+      UnsupportedNetworkError,
+      approveErc20,
+      approveErc20ForProxyConversion,
+      approveErc20ForSwapToPay,
+      approveErc20ForSwapToPayIfNeeded,
+      approveErc20ForSwapWithConversionToPay,
+      hasApprovalErc20ForSwapToPay,
+      hasErc20Approval,
+      hasErc20ApprovalForProxyConversion,
+      hasErc20ApprovalForSwapWithConversion,
+      payRequest,
+      swapToPayAnyToErc20Request,
+      swapToPayRequest,
+      utils,
+      type ISwapSettings,
+  } from "@requestnetwork/payment-processor";
+  import {
+      Types,
+      type RequestNetwork,
+  } from "@requestnetwork/request-client.js";
+  import {
+      Accordion,
+      Button,
+      Check,
+      calculateItemTotal,
+      formatDate,
+      getCurrenciesByNetwork,
   } from "@requestnetwork/shared";
   import type { WalletState } from "@web3-onboard/core";
-  import {
-    walletClientToSigner,
-    getSymbol,
-    checkNetwork,
-    getDecimals,
-  } from "$src/utils";
   import { formatUnits } from "viem";
-  import { MAX_ALLOWANCE } from "@requestnetwork/payment-processor/dist/payment/utils";
-  import type { IConversionSettings } from "@requestnetwork/payment-processor/dist/types";
 
   export let config;
   export let wallet: WalletState | undefined;
@@ -127,7 +133,7 @@
       );
       signer = walletClientToSigner(wallet);
       requestData = singleRequest?.getData();
-      approved = await checkApproval(requestData, signer);
+      approved = (await checkApproval(requestData, signer)) ? true : false;
       isPaid = requestData?.balance?.balance! >= requestData?.expectedAmount;
       loading = false;
     } catch (err: any) {
@@ -145,21 +151,28 @@
       const _request = await requestNetwork?.fromRequestId(
         requestData?.requestId!,
       );
+      console.log("Request DATA:", requestData);
 
       let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
+      let miscellaneous = requestData.contentData.miscellaneous;
       statuses = [...statuses, "Waiting for payment"];
       switch (paymentNetwork) {
         case Types.Extension.PAYMENT_NETWORK_ID.ERC20_FEE_PROXY_CONTRACT: {
           // Swap ERC20 to ERC20 and pay
-          if (
-            requestData.extensionData &&
-            requestData.extensionData[0].swapSettings
-          ) {
-            let swapSettings: ISwapSettings =
-              requestData.extensionData[0].swapSettings;
+          if (miscellaneous.swapSettings) {
+            let swapSettings: ISwapSettings = miscellaneous.swapSettings;
+            console.log("Swapsettings:", swapSettings);
             let paymentTx = await swapToPayRequest(
               requestData,
               swapSettings,
+              signer,
+            );
+            await paymentTx.wait(2);
+          } else if (miscellaneous.escrowSettings) {
+            let payEscrowTx = await Escrow.payEscrow(requestData, signer);
+            await payEscrowTx.wait(2);
+            let paymentTx = await Escrow.payRequestFromEscrow(
+              requestData,
               signer,
             );
             await paymentTx.wait(2);
@@ -171,9 +184,15 @@
         }
         case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ERC20_PROXY: {
           // Need to validate
+          // If extension data
+          if (!requestData.extensionData || !requestData.extensionData.length) {
+            throw new Error(
+              "Extension data must have conversion settings or swap settings",
+            );
+          }
           let conversionSettings = {
             currency: requestData.extensionData[0].conversionSettings.currency,
-            maxToSpend: MAX_ALLOWANCE,
+            maxToSpend: utils.MAX_ALLOWANCE,
           };
 
           if (requestData.extensionData.length === 2) {
@@ -208,6 +227,7 @@
         case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ETH_PROXY:
           break;
         case Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM:
+          // Create stream here
           break;
         default:
           throw new UnsupportedNetworkError(paymentNetwork);
@@ -232,14 +252,61 @@
 
   const checkApproval = async (requestData: any, signer: any) => {
     // Need to check for all payment networks, because each network can have a checking method.
-    return await hasErc20Approval(requestData!, address!, signer);
+    let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
+    let miscellaneous = requestData.contentData.miscellaneous;
+    switch (paymentNetwork) {
+      case Types.Extension.PAYMENT_NETWORK_ID.ERC20_FEE_PROXY_CONTRACT: {
+        // Check if actions include swap
+        if (miscellaneous.swapSettings) {
+          return await hasApprovalErc20ForSwapToPay(
+            requestData!,
+            address!,
+            miscellaneous.swapSettings.path[0],
+            signer,
+            // Check use token amount which need to swap to pay
+            1,
+          );
+        }
+
+        // Check if actions include escrow
+        // Check if actions donot include swap & escrow
+        return await hasErc20Approval(requestData!, address!, signer);
+      }
+      case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ERC20_PROXY: {
+        // Check if actions include conversion
+        return await hasErc20ApprovalForProxyConversion(
+          requestData!,
+          address!,
+          "paymentTokenAddress",
+          signer,
+          0,
+        );
+
+        // Check if actions include both cases are conversion & swap
+        return await hasErc20ApprovalForSwapWithConversion(
+          requestData!,
+          address!,
+          "paymentTokenAddress",
+          signer,
+          0,
+        );
+      }
+      case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ETH_PROXY:
+      case Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM:
+        break;
+      default:
+        throw new UnsupportedNetworkError(paymentNetwork);
+    }
   };
 
   async function approve() {
     try {
       loading = true;
 
+      console.log("Request Data in the approval process:", requestData);
+
       let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
+      let miscellaneous = requestData.contentData.miscellaneous;
       // Need check for these cases:
       // 0: ERC20_FEE_PROXY_CONTRACT
       // 1: ANY_TO_ERC20_PROXY
@@ -247,16 +314,42 @@
       // 3: ERC777_STREAM
       switch (paymentNetwork) {
         case Types.Extension.PAYMENT_NETWORK_ID.ERC20_FEE_PROXY_CONTRACT: {
+          let approvalTx;
           // Check swap only
-          let approvalTx = await approveErc20(requestData!, signer);
+          if (miscellaneous.swapSettings) {
+            // Need to change to approveErc20ForSwapToPayIfNeeded
+            approvalTx = await approveErc20ForSwapToPayIfNeeded(
+              requestData!,
+              address!,
+              miscellaneous.swapSettings.path[0],
+              signer,
+              1
+            );
+          } else if (miscellaneous.escrowSettings) {
+            // Escrow
+            approvalTx = await Escrow.approveErc20ForEscrow(
+              requestData!,
+              signer,
+            );
+          } else {
+            // Normal
+            approvalTx = await approveErc20(requestData!, signer);
+          }
           await approvalTx.wait(2);
           approved = true;
         }
         case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ERC20_PROXY: {
           // Two cases
-          // Swap & conversion
           // Only conversion
-          let approvalTx = await approveErc20(requestData!, signer);
+          let approvalTx = await approveErc20ForProxyConversion(
+            requestData!,
+            signer,
+          );
+          // Swap & conversion
+          approvalTx = await approveErc20ForSwapWithConversionToPay(
+            requestData!,
+            signer,
+          );
           await approvalTx.wait(2);
           approved = true;
         }
