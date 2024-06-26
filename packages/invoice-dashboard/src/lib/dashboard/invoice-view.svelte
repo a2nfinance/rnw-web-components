@@ -1,40 +1,39 @@
 <script lang="ts">
   import {
-      checkNetwork,
-      getDecimals,
-      getSymbol,
-      walletClientToSigner,
+    checkNetwork,
+    getDecimals,
+    getSymbol,
+    walletClientToSigner,
   } from "$src/utils";
   import { getPaymentNetworkExtension } from "@requestnetwork/payment-detection";
   import {
-      Escrow,
-      UnsupportedNetworkError,
-      approveErc20,
-      approveErc20ForProxyConversion,
-      approveErc20ForSwapToPay,
-      approveErc20ForSwapToPayIfNeeded,
-      approveErc20ForSwapWithConversionToPay,
-      hasApprovalErc20ForSwapToPay,
-      hasErc20Approval,
-      hasErc20ApprovalForProxyConversion,
-      hasErc20ApprovalForSwapWithConversion,
-      payRequest,
-      swapToPayAnyToErc20Request,
-      swapToPayRequest,
-      utils,
-      type ISwapSettings,
+    Escrow,
+    UnsupportedNetworkError,
+    approveErc20,
+    approveErc20ForProxyConversionIfNeeded,
+    approveErc20ForSwapToPayIfNeeded,
+    approveErc20ForSwapWithConversionToPay,
+    hasApprovalErc20ForSwapToPay,
+    hasErc20Approval,
+    hasErc20ApprovalForProxyConversion,
+    hasErc20ApprovalForSwapWithConversion,
+    payRequest,
+    swapToPayAnyToErc20Request,
+    swapToPayRequest,
+    utils,
+    type ISwapSettings,
   } from "@requestnetwork/payment-processor";
   import {
-      Types,
-      type RequestNetwork,
+    Types,
+    type RequestNetwork,
   } from "@requestnetwork/request-client.js";
   import {
-      Accordion,
-      Button,
-      Check,
-      calculateItemTotal,
-      formatDate,
-      getCurrenciesByNetwork,
+    Accordion,
+    Button,
+    Check,
+    calculateItemTotal,
+    formatDate,
+    getCurrenciesByNetwork,
   } from "@requestnetwork/shared";
   import type { WalletState } from "@web3-onboard/core";
   import { formatUnits } from "viem";
@@ -169,8 +168,16 @@
             );
             await paymentTx.wait(2);
           } else if (miscellaneous.escrowSettings) {
-            let payEscrowTx = await Escrow.payEscrow(requestData, signer);
+            console.log("Pay Escrow Contract");
+            // FeeAmount is 1 to avoid error "Zero Value"
+            let payEscrowTx = await Escrow.payEscrow(
+              requestData,
+              signer,
+              undefined,
+              1,
+            );
             await payEscrowTx.wait(2);
+            statuses = [...statuses, "Pay Request from Escrow"];
             let paymentTx = await Escrow.payRequestFromEscrow(
               requestData,
               signer,
@@ -181,54 +188,9 @@
             let paymentTx = await payRequest(requestData, signer);
             await paymentTx.wait(2);
           }
-        }
-        case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ERC20_PROXY: {
-          // Need to validate
-          // If extension data
-          if (!requestData.extensionData || !requestData.extensionData.length) {
-            throw new Error(
-              "Extension data must have conversion settings or swap settings",
-            );
-          }
-          let conversionSettings = {
-            currency: requestData.extensionData[0].conversionSettings.currency,
-            maxToSpend: utils.MAX_ALLOWANCE,
-          };
-
-          if (requestData.extensionData.length === 2) {
-            // Need to validate
-            let swapSettings: ISwapSettings =
-              requestData.extensionData[1]?.swapSettings;
-            // conversionSettings type is IConversionSettings
-            // Swap ERC20 and convert to FIAT to pay.
-            let paymentTx = await await swapToPayAnyToErc20Request(
-              requestData,
-              signer,
-              {
-                swap: swapSettings,
-                conversion: conversionSettings,
-              },
-            );
-            await paymentTx.wait(2);
-          } else {
-            // conversionSettings type is IConversionPaymentSettings
-            // Conversion transaction only
-            let paymentTx = await payRequest(
-              requestData,
-              signer,
-              undefined,
-              undefined,
-              conversionSettings,
-            );
-            await paymentTx.wait(2);
-          }
+          break;
         }
 
-        case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ETH_PROXY:
-          break;
-        case Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM:
-          // Create stream here
-          break;
         default:
           throw new UnsupportedNetworkError(paymentNetwork);
       }
@@ -266,34 +228,20 @@
             // Check use token amount which need to swap to pay
             1,
           );
+        } else if (miscellaneous.escrowSettings) {
+          let approvalTx = await Escrow.approveErc20ForEscrow(
+            requestData!,
+            signer,
+          );
+
+          await approvalTx.wait(2);
+          return true;
+        } else {
+          // Check if actions include escrow
+          // Check if actions donot include swap & escrow
+          return await hasErc20Approval(requestData!, address!, signer);
         }
-
-        // Check if actions include escrow
-        // Check if actions donot include swap & escrow
-        return await hasErc20Approval(requestData!, address!, signer);
       }
-      case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ERC20_PROXY: {
-        // Check if actions include conversion
-        return await hasErc20ApprovalForProxyConversion(
-          requestData!,
-          address!,
-          "paymentTokenAddress",
-          signer,
-          0,
-        );
-
-        // Check if actions include both cases are conversion & swap
-        return await hasErc20ApprovalForSwapWithConversion(
-          requestData!,
-          address!,
-          "paymentTokenAddress",
-          signer,
-          0,
-        );
-      }
-      case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ETH_PROXY:
-      case Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM:
-        break;
       default:
         throw new UnsupportedNetworkError(paymentNetwork);
     }
@@ -307,6 +255,7 @@
 
       let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
       let miscellaneous = requestData.contentData.miscellaneous;
+      let approvalTx: any;
       // Need check for these cases:
       // 0: ERC20_FEE_PROXY_CONTRACT
       // 1: ANY_TO_ERC20_PROXY
@@ -314,7 +263,6 @@
       // 3: ERC777_STREAM
       switch (paymentNetwork) {
         case Types.Extension.PAYMENT_NETWORK_ID.ERC20_FEE_PROXY_CONTRACT: {
-          let approvalTx;
           // Check swap only
           if (miscellaneous.swapSettings) {
             // Need to change to approveErc20ForSwapToPayIfNeeded
@@ -323,9 +271,10 @@
               address!,
               miscellaneous.swapSettings.path[0],
               signer,
-              1
+              1,
             );
           } else if (miscellaneous.escrowSettings) {
+            console.log("Approve Escrow Here");
             // Escrow
             approvalTx = await Escrow.approveErc20ForEscrow(
               requestData!,
@@ -337,27 +286,8 @@
           }
           await approvalTx.wait(2);
           approved = true;
-        }
-        case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ERC20_PROXY: {
-          // Two cases
-          // Only conversion
-          let approvalTx = await approveErc20ForProxyConversion(
-            requestData!,
-            signer,
-          );
-          // Swap & conversion
-          approvalTx = await approveErc20ForSwapWithConversionToPay(
-            requestData!,
-            signer,
-          );
-          await approvalTx.wait(2);
-          approved = true;
-        }
-
-        case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ETH_PROXY:
           break;
-        case Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM:
-          break;
+        }
         default:
           throw new UnsupportedNetworkError(paymentNetwork);
       }
@@ -371,6 +301,7 @@
 
   async function switchNetworkIfNeeded(network: string) {
     try {
+      console.log(requestData!);
       const targetNetworkId = String(getNetworkIdFromNetworkName(network));
       await wallet?.provider.request({
         method: "wallet_switchEthereumChain",

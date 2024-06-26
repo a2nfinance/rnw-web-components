@@ -19,7 +19,7 @@
   } from "@requestnetwork/shared";
   import { onMount } from "svelte";
   import { formatUnits } from "viem";
-  import { Drawer, InvoiceView } from "./dashboard";
+  import { Drawer, InvoiceView, InvoiceViewConversion } from "./dashboard";
   import type { WalletState } from "@web3-onboard/core";
   import { Types } from "@requestnetwork/request-client.js";
   import type { RequestNetwork } from "@requestnetwork/request-client.js";
@@ -147,7 +147,7 @@
 
   $: paginatedRequests = (filteredRequests ?? []).slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const goToPage = (page: number) => {
@@ -193,7 +193,7 @@
 
   const handleRequestSelect = (
     e: Event,
-    request: Types.IRequestDataWithEvents
+    request: Types.IRequestDataWithEvents,
   ) => {
     activeRequest = request;
   };
@@ -338,7 +338,7 @@
                   scope="col"
                   on:click={() =>
                     handleSort(
-                      currentTab === "Pay" ? "payee.value" : "payer.value"
+                      currentTab === "Pay" ? "payee.value" : "payer.value",
                     )}
                   >{currentTab === "Pay" ? "Payee" : "Payer"}<i
                     class={`caret `}
@@ -385,7 +385,7 @@
                   {#if columns.issuedAt}
                     <td
                       >{new Date(
-                        request.contentData.creationDate
+                        request.contentData.creationDate,
                       ).toLocaleDateString() || "-"}</td
                     >
                   {/if}
@@ -393,14 +393,14 @@
                     <td
                       >{request?.contentData?.paymentTerms?.dueDate
                         ? new Date(
-                            request?.contentData?.paymentTerms?.dueDate
+                            request?.contentData?.paymentTerms?.dueDate,
                           ).toLocaleDateString()
                         : "-"}</td
                     >
                   {/if}
                   <td
                     >{new Date(
-                      request.timestamp * 1000
+                      request.timestamp * 1000,
                     ).toLocaleDateString()}</td
                   >
                   <td>{request.contentData.invoiceNumber || "-"}</td>
@@ -424,7 +424,7 @@
                           >{formatAddress(
                             currentTab === "Pay"
                               ? request.payee?.value ?? ""
-                              : request.payer?.value ?? ""
+                              : request.payer?.value ?? "",
                           )}</span
                         >
                         <Copy
@@ -440,12 +440,12 @@
                       BigInt(request.expectedAmount),
                       getDecimals(
                         request.currencyInfo.network ?? "",
-                        request.currencyInfo.value
-                      )
+                        request.currencyInfo.value,
+                      ),
                     )}
                     {getSymbol(
                       request.currencyInfo.network ?? "",
-                      request.currencyInfo.value
+                      request.currencyInfo.value,
                     )}
                   </td>
                   <td> {checkStatus(request)}</td>
@@ -458,8 +458,16 @@
           active={activeRequest !== undefined}
           onClose={handleRemoveSelectedRequest}
         >
-          {#if activeRequest !== undefined}
+          {#if activeRequest !== undefined && !activeRequest.contentData?.miscellaneous?.conversionSettings && !activeRequest.contentData?.miscellaneous?.swapSettings}
             <InvoiceView
+              {wallet}
+              {requestNetwork}
+              config={activeConfig}
+              request={activeRequest}
+            />
+          {/if}
+          {#if activeRequest !== undefined && activeRequest.contentData?.miscellaneous?.conversionSettings && !activeRequest.contentData?.miscellaneous?.swapSettings}
+            <InvoiceViewConversion
               {wallet}
               {requestNetwork}
               config={activeConfig}
