@@ -23,8 +23,15 @@
   import type { WalletState } from "@web3-onboard/core";
   import { Types } from "@requestnetwork/request-client.js";
   import type { RequestNetwork } from "@requestnetwork/request-client.js";
-  import { debounce, getSymbol, getDecimals, formatAddress } from "$src/utils";
+  import {
+    debounce,
+    getSymbol,
+    getDecimals,
+    formatAddress,
+    checkNetwork,
+  } from "$src/utils";
   import InvoiceViewStream from "./dashboard/invoice-view-stream.svelte";
+  import { getErc777Currencies } from "$src/utils/erc777-stream-utils";
 
   export let config: IConfig;
   export let wallet: WalletState;
@@ -438,17 +445,33 @@
                   {/if}
                   <td>
                     {#if request.currencyInfo.network}
-                      {formatUnits(
-                        BigInt(request.expectedAmount),
-                        getDecimals(
+                      {#if request.currencyInfo.type === Types.RequestLogic.CURRENCY.ERC20}
+                        {formatUnits(
+                          BigInt(request.expectedAmount),
+                          getDecimals(
+                            request.currencyInfo.network ?? "",
+                            request.currencyInfo.value,
+                          ),
+                        )}
+                        {getSymbol(
                           request.currencyInfo.network ?? "",
                           request.currencyInfo.value,
-                        ),
-                      )}
-                      {getSymbol(
-                        request.currencyInfo.network ?? "",
-                        request.currencyInfo.value,
-                      )}
+                        )}
+                      {:else if request.currencyInfo.type === Types.RequestLogic.CURRENCY.ERC777}
+                        {formatUnits(
+                          BigInt(request.expectedAmount),
+                          getErc777Currencies(
+                            request.currencyInfo.network || "",
+                          ).get(
+                            `${checkNetwork(request.currencyInfo.network || "")}_${request.currencyInfo.value}`,
+                          )?.decimals || 18,
+                        )}
+                        {getErc777Currencies(
+                          request.currencyInfo.network || "",
+                        ).get(
+                          `${checkNetwork(request.currencyInfo.network || "")}_${request.currencyInfo.value}`,
+                        )?.symbol}
+                      {/if}
                     {:else}
                       {request.expectedAmount} {request.currency}
                     {/if}
