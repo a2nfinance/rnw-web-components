@@ -1,39 +1,33 @@
 <script lang="ts">
   import {
-    checkNetwork,
-    getDecimals,
-    getSymbol,
-    walletClientToSigner,
+      checkNetwork,
+      getDecimals,
+      getSymbol,
+      walletClientToSigner,
   } from "$src/utils";
   import { getPaymentNetworkExtension } from "@requestnetwork/payment-detection";
   import {
-    Escrow,
-    UnsupportedNetworkError,
-    approveErc20,
-    approveErc20ForProxyConversionIfNeeded,
-    approveErc20ForSwapToPayIfNeeded,
-    approveErc20ForSwapWithConversionToPay,
-    hasApprovalErc20ForSwapToPay,
-    hasErc20Approval,
-    hasErc20ApprovalForProxyConversion,
-    hasErc20ApprovalForSwapWithConversion,
-    payRequest,
-    swapToPayAnyToErc20Request,
-    swapToPayRequest,
-    utils,
-    type ISwapSettings,
+      Escrow,
+      UnsupportedNetworkError,
+      approveErc20,
+      approveErc20ForSwapToPayIfNeeded,
+      hasApprovalErc20ForSwapToPay,
+      hasErc20Approval,
+      payRequest,
+      swapToPayRequest,
+      type ISwapSettings
   } from "@requestnetwork/payment-processor";
   import {
-    Types,
-    type RequestNetwork,
+      Types,
+      type RequestNetwork,
   } from "@requestnetwork/request-client.js";
   import {
-    Accordion,
-    Button,
-    Check,
-    calculateItemTotal,
-    formatDate,
-    getCurrenciesByNetwork,
+      Accordion,
+      Button,
+      Check,
+      calculateItemTotal,
+      formatDate,
+      getCurrenciesByNetwork,
   } from "@requestnetwork/shared";
   import type { WalletState } from "@web3-onboard/core";
   import { formatUnits } from "viem";
@@ -132,8 +126,11 @@
       );
       signer = walletClientToSigner(wallet);
       requestData = singleRequest?.getData();
-      approved = (await checkApproval(requestData, signer)) ? true : false;
+
       isPaid = requestData?.balance?.balance! >= requestData?.expectedAmount;
+      if (!isPaid) {
+        approved = (await checkApproval(requestData, signer)) ? true : false;
+      }
       loading = false;
     } catch (err: any) {
       loading = false;
@@ -168,7 +165,7 @@
             );
             await paymentTx.wait(2);
           } else if (miscellaneous.escrowSettings) {
-            console.log("Pay Escrow Contract");
+            statuses = [...statuses, "Pay Escrow Contract"];
             // FeeAmount is 1 to avoid error "Zero Value"
             let payEscrowTx = await Escrow.payEscrow(
               requestData,
@@ -231,6 +228,7 @@
         } else if (miscellaneous.escrowSettings) {
           let approvalTx = await Escrow.approveErc20ForEscrow(
             requestData!,
+            currency?.value || "",
             signer,
           );
 
@@ -278,6 +276,7 @@
             // Escrow
             approvalTx = await Escrow.approveErc20ForEscrow(
               requestData!,
+              currency?.value || "",
               signer,
             );
           } else {

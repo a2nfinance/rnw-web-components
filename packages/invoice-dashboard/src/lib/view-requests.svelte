@@ -24,6 +24,7 @@
   import { Types } from "@requestnetwork/request-client.js";
   import type { RequestNetwork } from "@requestnetwork/request-client.js";
   import { debounce, getSymbol, getDecimals, formatAddress } from "$src/utils";
+  import InvoiceViewStream from "./dashboard/invoice-view-stream.svelte";
 
   export let config: IConfig;
   export let wallet: WalletState;
@@ -436,17 +437,21 @@
                     </td>
                   {/if}
                   <td>
-                    {formatUnits(
-                      BigInt(request.expectedAmount),
-                      getDecimals(
+                    {#if request.currencyInfo.network}
+                      {formatUnits(
+                        BigInt(request.expectedAmount),
+                        getDecimals(
+                          request.currencyInfo.network ?? "",
+                          request.currencyInfo.value,
+                        ),
+                      )}
+                      {getSymbol(
                         request.currencyInfo.network ?? "",
                         request.currencyInfo.value,
-                      ),
-                    )}
-                    {getSymbol(
-                      request.currencyInfo.network ?? "",
-                      request.currencyInfo.value,
-                    )}
+                      )}
+                    {:else}
+                      {request.expectedAmount} {request.currency}
+                    {/if}
                   </td>
                   <td> {checkStatus(request)}</td>
                 </tr>
@@ -458,7 +463,7 @@
           active={activeRequest !== undefined}
           onClose={handleRemoveSelectedRequest}
         >
-          {#if activeRequest !== undefined && !activeRequest.contentData?.miscellaneous?.conversionSettings && !activeRequest.contentData?.miscellaneous?.swapSettings}
+          {#if activeRequest !== undefined && !activeRequest.contentData?.miscellaneous?.conversionSettings && !activeRequest.contentData?.miscellaneous?.streamSettings}
             <InvoiceView
               {wallet}
               {requestNetwork}
@@ -466,8 +471,16 @@
               request={activeRequest}
             />
           {/if}
-          {#if activeRequest !== undefined && activeRequest.contentData?.miscellaneous?.conversionSettings && !activeRequest.contentData?.miscellaneous?.swapSettings}
+          {#if activeRequest !== undefined && activeRequest.contentData?.miscellaneous?.conversionSettings}
             <InvoiceViewConversion
+              {wallet}
+              {requestNetwork}
+              config={activeConfig}
+              request={activeRequest}
+            />
+          {/if}
+          {#if activeRequest !== undefined && activeRequest.contentData?.miscellaneous?.streamSettings}
+            <InvoiceViewStream
               {wallet}
               {requestNetwork}
               config={activeConfig}

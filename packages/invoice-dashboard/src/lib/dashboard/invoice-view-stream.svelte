@@ -1,21 +1,17 @@
 <script lang="ts">
-    import { checkNetwork, getSymbol, walletClientToSigner } from "$src/utils";
-    import { CurrencyManager } from "@requestnetwork/currency";
-    import { getPaymentNetworkExtension } from "@requestnetwork/payment-detection";
     import {
-        approveErc20ForProxyConversionIfNeeded,
-        approveErc20ForSwapWithConversionToPay,
-        hasErc20ApprovalForProxyConversion,
-        hasErc20ApprovalForSwapWithConversion,
-        payAnyToErc20ProxyRequest,
-        payAnyToEthProxyRequest,
-        swapToPayAnyToErc20Request,
-        utils,
-        type ISwapSettings,
-    } from "@requestnetwork/payment-processor";
-    import {
+        checkExistingStream,
+        checkNetwork,
+        closeErc777StreamRequest,
+        getDecimals,
+        getSymbol,
+        payErc777StreamRequest,
+        walletClientToSigner,
+    } from "$src/utils";
+    import { getErc777Currencies } from "$src/utils/erc777-stream-utils";
+    import type {
+        RequestNetwork,
         Types,
-        type RequestNetwork,
     } from "@requestnetwork/request-client.js";
     import {
         Accordion,
@@ -23,7 +19,6 @@
         Check,
         calculateItemTotal,
         formatDate,
-        getCurrenciesByNetwork,
     } from "@requestnetwork/shared";
     import type { WalletState } from "@web3-onboard/core";
     import { formatUnits } from "viem";
@@ -33,12 +28,10 @@
     export let requestNetwork: RequestNetwork | null | undefined;
     export let request: Types.IRequestDataWithEvents | undefined;
 
-    let conversionSettings =
-        request?.contentData?.miscellaneous?.conversionSettings;
-    let network = conversionSettings?.currency?.network || "mainnet";
-    let currencies = getCurrenciesByNetwork(network);
+    let network = request?.currencyInfo?.network || "mainnet";
+    let currencies = getErc777Currencies(network);
     let currency = currencies.get(
-        `${checkNetwork(network)}_${conversionSettings?.currency?.value}`,
+        `${checkNetwork(network)}_${request?.currencyInfo?.value}`,
     );
 
     let statuses: any = [];
@@ -46,7 +39,7 @@
     let loading = false;
     let requestData: any = null;
     let signer: any = null;
-    let approved = false;
+    let streamExisted = false;
     let address = wallet?.accounts?.[0]?.address;
     let firstItems: any;
     let otherItems: any;
@@ -99,17 +92,23 @@
 
     $: {
         wallet = wallet;
-        network = conversionSettings?.currency?.network || "mainnet";
-        currencies = getCurrenciesByNetwork(network);
+        network = request?.currencyInfo?.network || "mainnet";
+        currencies = getErc777Currencies(network);
         currency = currencies.get(
-            `${checkNetwork(network)}_${conversionSettings?.currency?.value}`,
+            `${checkNetwork(network)}_${request?.currencyInfo?.value}`,
         );
     }
 
     $: {
         currencyDetails = {
-            symbol: request?.currencyInfo.value ?? "",
-            decimals: 0,
+            symbol: getSymbol(
+                request?.currencyInfo.network ?? "",
+                request?.currencyInfo.value ?? "",
+            ),
+            decimals: getDecimals(
+                request?.currencyInfo?.network ?? "",
+                request?.currencyInfo?.value ?? "",
+            ),
         };
     }
 
@@ -122,11 +121,8 @@
             );
             signer = walletClientToSigner(wallet);
             requestData = singleRequest?.getData();
-            approved = (await checkApproval(requestData, signer))
-                ? true
-                : false;
-            isPaid =
-                requestData?.balance?.balance! >= requestData?.expectedAmount;
+            console.log("Request Data:", requestData);
+            streamExisted = await checkExisted(requestData, signer);
             loading = false;
         } catch (err: any) {
             loading = false;
@@ -140,108 +136,14 @@
     const payTheRequest = async () => {
         try {
             loading = true;
-            const _request = await requestNetwork?.fromRequestId(
-                requestData?.requestId!,
-            );
             console.log("Request DATA:", requestData);
-
-            let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
-            let miscellaneous = requestData.contentData?.miscellaneous;
             statuses = [...statuses, "Waiting for payment"];
 
-            if (
-                !miscellaneous?.conversionSettings &&
-                !miscellaneous?.swapSettings
-            ) {
-                throw new Error(
-                    "Extension data must have conversion settings or swap settings",
-                );
-            }
-
-            // let tokenHash =
-            //     miscellaneous.conversionSettings.currency.value.toLowerCase();
-            let currencyConversion = miscellaneous.conversionSettings.currency;
-
-            // let currencyManager = CurrencyManager.getDefault();
-            // let currency = this.knownCurrencies.
-            // let defaultList = CurrencyManager.getDefaultList();
-            // let tokenInList: any = {};
-            // let indexOfToken: number = 0;
-            // defaultList.forEach((x, index) => {
-            //     if (x.hash.toLowerCase() === tokenHash) {
-            //         tokenInList = x;
-            //         indexOfToken = index;
-            //     }
-            // });
-            // if (tokenInList && indexOfToken) {
-            //     let adjustToken = { ...tokenInList, hash: tokenHash};
-            //     defaultList[indexOfToken] = adjustToken;
-            // }
-
-            // let newManager = new CurrencyManager(
-            //     defaultList,
-            //     CurrencyManager.getDefaultLegacyTokens(),
-            // );
-
-            // console.log("Currency manager:", newManager);
-
-            let conversionSettings = {
-                currency: currencyConversion,
-                maxToSpend: utils.MAX_ALLOWANCE,
-                // newManager,
-            };
-
-            if (miscellaneous?.swapSettings) {
-                // Need to validate
-                let swapSettings: ISwapSettings = miscellaneous?.swapSettings;
-                // conversionSettings type is IConversionSettings
-                // Swap ERC20 and convert to FIAT to pay.
-                let paymentTx = await await swapToPayAnyToErc20Request(
-                    requestData,
-                    signer,
-                    {
-                        swap: swapSettings,
-                        conversion: conversionSettings,
-                    },
-                );
-                await paymentTx.wait(2);
-            } else {
-                console.log("NETWORK:", paymentNetwork);
-                if (
-                    paymentNetwork ===
-                    Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ERC20_PROXY
-                ) {
-                    console.log("ANY TO ERC20");
-                    // conversionSettings type is IConversionPaymentSettings
-                    // Conversion transaction only
-                    let paymentTx = await payAnyToErc20ProxyRequest(
-                        requestData,
-                        signer,
-                        conversionSettings,
-                    );
-                    await paymentTx.wait(2);
-                } else if (
-                    paymentNetwork ===
-                    Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ETH_PROXY
-                ) {
-                    console.log("ANY TO ETH");
-                    // conversionSettings type is IConversionPaymentSettings
-                    // Conversion transaction only
-                    let paymentTx = await payAnyToEthProxyRequest(
-                        requestData,
-                        signer,
-                        conversionSettings,
-                    );
-                    await paymentTx.wait(2);
-                }
-            }
+            let paymentTx = await payErc777StreamRequest(requestData, signer);
+            await paymentTx.wait(2);
 
             statuses = [...statuses, "Payment detected"];
-            while (requestData.balance?.balance! < requestData.expectedAmount) {
-                requestData = await _request?.refresh();
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-            }
-
+            streamExisted = true;
             statuses = [...statuses, "Payment confirmed"];
             isPaid = true;
             loading = false;
@@ -253,85 +155,33 @@
         }
     };
 
-    const checkApproval = async (requestData: any, signer: any) => {
-        let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
-        if (
-            paymentNetwork ===
-            Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ETH_PROXY
-        )
-            return true;
-        // Need to check for all payment networks, because each network can have a checking method.
-        // let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
-        let miscellaneous = requestData.contentData?.miscellaneous;
-
-        // Check if actions include conversion
-        if (miscellaneous.conversionSettings && !miscellaneous.swapSettings) {
-            return await hasErc20ApprovalForProxyConversion(
-                requestData!,
-                address!,
-                miscellaneous?.conversionSettings?.currency?.value,
-                signer,
-                1,
-            );
-        }
-        // Check if actions include both cases are conversion & swap
-        if (miscellaneous.swapSettings && miscellaneous.conversionSettings) {
-            return await hasErc20ApprovalForSwapWithConversion(
-                requestData!,
-                address!,
-                miscellaneous.swapSettings.path[0],
-                signer,
-                1,
-            );
-        }
-    };
-
-    async function approve() {
+    const closeTheRequest = async () => {
         try {
             loading = true;
+            console.log("Request DATA:", requestData);
+            statuses = [...statuses, "Waiting for close"];
 
-            console.log("Request Data in the approval process:", requestData);
+            let paymentTx = await closeErc777StreamRequest(requestData, signer);
+            await paymentTx.wait(2);
 
-            // let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
-            let miscellaneous = requestData.contentData.miscellaneous;
-            let approvalTx: any;
-
-            // Two cases
-            // Only conversion
-            if (
-                miscellaneous.conversionSettings &&
-                !miscellaneous.swapSettings
-            ) {
-                approvalTx = await approveErc20ForProxyConversionIfNeeded(
-                    requestData!,
-                    address!,
-                    miscellaneous?.conversionSettings?.currency?.value,
-                    signer,
-                    1,
-                );
-            }
-
-            if (
-                miscellaneous.conversionSettings &&
-                miscellaneous.swapSettings
-            ) {
-                // Swap & conversion
-                approvalTx = await approveErc20ForSwapWithConversionToPay(
-                    requestData!,
-                    miscellaneous.swapSettings.path[0],
-                    signer,
-                );
-            }
-
-            await approvalTx.wait(2);
-            approved = true;
-
+            statuses = [...statuses, "Close the stream request"];
+            streamExisted = false;
+            isPaid = true;
             loading = false;
+            statuses = [];
         } catch (err) {
-            console.error("Something went wrong while approving ERC20 : ", err);
+            console.error("Something went wrong while paying : ", err);
             loading = false;
+            statuses = [];
         }
-    }
+    };
+    const checkExisted = async (requestData: any, signer: any) => {
+        return await checkExistingStream(
+            requestData,
+            request?.payer?.value || "",
+            signer,
+        );
+    };
 
     async function switchNetworkIfNeeded(network: string) {
         try {
@@ -426,15 +276,7 @@
     </h3>
     <h3 class="invoice-info-payment">
         <span style="font-weight: 500;">Invoice Currency:</span>
-        {request?.currencyInfo.value}
-    </h3>
-
-    <h3 class="invoice-info-payment">
-        <span style="font-weight: 500;">Convert to token:</span>
-        {getSymbol(
-            conversionSettings?.currency?.network ?? "",
-            conversionSettings?.currency?.value ?? "",
-        )}
+        {currency?.symbol}
     </h3>
 
     {#if request?.contentData?.invoiceItems}
@@ -605,14 +447,26 @@
                     padding="px-[12px] py-[6px]"
                     onClick={() => switchNetworkIfNeeded(network)}
                 />
-            {:else if !approved && !isPaid && !isPayee && !unsupportedNetwork}
+            {:else if streamExisted && !isPayee && !unsupportedNetwork}
                 <Button
                     type="button"
-                    text="Approve"
+                    text="Close request"
                     padding="px-[12px] py-[6px]"
-                    onClick={approve}
+                    onClick={closeTheRequest}
                 />
-            {:else if approved && !isPaid && !isPayee && !unsupportedNetwork}
+            {:else if !streamExisted && !isPayee && !unsupportedNetwork}
+                <Button
+                    type="button"
+                    text="Make oneoff payment"
+                    padding="px-[12px] py-[6px]"
+                    onClick={() => {}}
+                />
+                <Button
+                    type="button"
+                    text="Close request"
+                    padding="px-[12px] py-[6px]"
+                    onClick={closeTheRequest}
+                />
                 <Button
                     type="button"
                     text="Pay"
