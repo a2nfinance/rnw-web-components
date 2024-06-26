@@ -10,9 +10,16 @@
   } from "@requestnetwork/shared";
   import { InvoiceForm, InvoiceView } from "./invoice";
   import { Modal, Button, Status } from "@requestnetwork/shared";
-  import { getInitialFormData, prepareRequestParams } from "$utils";
+  import {
+    getInitialFormData,
+    prepareRequestParams,
+    prepareEscrowRequestParams,
+    prepareSwapToPayAnyRequestParams,
+    prepareConversionRequestParams,
+    prepareSwapToPayRequestParams,
+    prepareStreamRequestParams,
+  } from "$utils";
   import type { RequestNetwork } from "@requestnetwork/request-client.js";
-    import { prepareConversionRequestParams, prepareSwapToPayRequestParams } from "./utils/prepareRequest";
 
   export let config: IConfig;
   export let signer: string = "";
@@ -39,7 +46,7 @@
   let network = networks[0];
   const handleNetworkChange = (chainId: string) => {
     const selectedNetwork = networks.find(
-      (network) => network.chainId === chainId
+      (network) => network.chainId === chainId,
     );
 
     if (selectedNetwork) {
@@ -88,7 +95,7 @@
     const hasItems =
       formData.items.length > 0 &&
       formData.items.every(
-        (item) => item.description && item.quantity > 0 && item.unitPrice > 0
+        (item) => item.description && item.quantity > 0 && item.unitPrice > 0,
       );
 
     const addressesAreValid = !payeeAddressError && !clientAddressError;
@@ -126,12 +133,12 @@
 
     formData.miscellaneous.builderId = activeConfig?.builderId || "";
     formData.miscellaneous.createdWith = window.location.hostname;
-    console.log("Original request params:")
-    console.log("Signer:", signer)
-    console.log("formData:", formData)
-    console.log("currency:", currency)
-    console.log("currencies:", currencies)
-    console.log("invoiceTotals:", invoiceTotals)
+    console.log("Original request params:");
+    console.log("Signer:", signer);
+    console.log("formData:", formData);
+    console.log("currency:", currency);
+    console.log("currencies:", currencies);
+    console.log("invoiceTotals:", invoiceTotals);
     console.log("End");
     // const requestCreateParameters = prepareRequestParams({
     //   signer,
@@ -140,7 +147,41 @@
     //   currencies,
     //   invoiceTotals,
     // });
-    const requestCreateParameters = prepareSwapToPayRequestParams({
+    // const requestCreateParameters = prepareSwapToPayRequestParams({
+    //   signer,
+    //   formData,
+    //   currency,
+    //   currencies,
+    //   invoiceTotals,
+    // });
+
+    // Still error at this line:
+    // https://github.com/RequestNetwork/requestNetwork/blob/1d4eccee2f59e8a93d275f5ef1b498c195493205/packages/smart-contracts/src/contracts/ERC20EscrowToPay.sol#L205
+    // But if we use ERC20FeeProxy instead of ERC20EscrowToPay then the transaction can be executed
+    // ERC20FeeProxy: https://sepolia.etherscan.io/address/0x399F5EE127ce7432E4921a61b8CF52b0af52cbfE#writeContract
+    // const requestCreateParameters = prepareEscrowRequestParams({
+    //   signer,
+    //   formData,
+    //   currency,
+    //   currencies,
+    //   invoiceTotals,
+    // });
+    // const requestCreateParameters = prepareConversionRequestParams({
+    //   signer,
+    //   formData,
+    //   currency,
+    //   currencies,
+    //   invoiceTotals,
+    // });
+
+    // const requestCreateParameters = prepareSwapToPayAnyRequestParams({
+    //   signer,
+    //   formData,
+    //   currency,
+    //   currencies,
+    //   invoiceTotals,
+    // });
+    const requestCreateParameters = prepareStreamRequestParams({
       signer,
       formData,
       currency,
@@ -148,11 +189,11 @@
       invoiceTotals,
     });
 
-    console.log("Prepared request params:")
-    console.log("Request Info:", requestCreateParameters.requestInfo)
-    console.log("Payment Network:", requestCreateParameters.paymentNetwork)
-    console.log("Content Data:", requestCreateParameters.contentData)
-    console.log("Signer:", requestCreateParameters.signer)
+    console.log("Prepared request params:");
+    console.log("Request Info:", requestCreateParameters.requestInfo);
+    console.log("Payment Network:", requestCreateParameters.paymentNetwork);
+    console.log("Content Data:", requestCreateParameters.contentData);
+    console.log("Signer:", requestCreateParameters.signer);
     console.log("End");
 
     if (requestNetwork) {

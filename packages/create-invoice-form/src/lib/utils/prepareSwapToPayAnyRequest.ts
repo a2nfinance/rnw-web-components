@@ -1,6 +1,5 @@
 import { Types, Utils } from "@requestnetwork/request-client.js";
 
-import { parseEther, zeroAddress } from "viem";
 import type { IRequestParams } from "./types";
 
 // Test Swap to pay
