@@ -1,5 +1,5 @@
 import { Types, Utils } from "@requestnetwork/request-client.js";
-import { parseEther, parseUnits } from "viem";
+import { parseUnits } from "viem";
 import type { IRequestParams } from "./types";
 
 export const prepareStreamRequestParams = ({
@@ -8,16 +8,18 @@ export const prepareStreamRequestParams = ({
     formData,
     currencies,
     invoiceTotals,
+    streamToken,
+    streamTokens
   }: IRequestParams): Types.ICreateRequestParameters => ({
     requestInfo: {
       currency: {
         type: Types.RequestLogic.CURRENCY.ERC777,
-        value: "0xb598E6C621618a9f63788816ffb50Ee2862D443B",
-        network: "sepolia",
+        value: streamTokens.get(streamToken)!.value,
+        network: streamTokens.get(streamToken)!.network,
       },
       expectedAmount: parseUnits(
         invoiceTotals.totalAmount.toFixed(2),
-        18
+        streamTokens.get(streamToken)!.decimals
       ).toString(),
       payee: {
         type: Types.Identity.TYPE.ETHEREUM_ADDRESS,
@@ -32,8 +34,11 @@ export const prepareStreamRequestParams = ({
     paymentNetwork: {
       id: Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM,
       parameters: {
-        expectedStartDate: new Date().getTime().toString(),
-        expectedFlowRate: "1000",
+        expectedStartDate: new Date(formData.expectedStartDate || "").getTime().toString(),
+        expectedFlowRate: parseUnits(
+          (formData.expectedFlowRate || 0.01).toString(),
+          streamTokens.get(streamToken)!.decimals
+        ).toString(),
         paymentAddress: formData.payeeAddress
       },
     },
@@ -46,9 +51,6 @@ export const prepareStreamRequestParams = ({
         streamSettings: "true",
         labels: formData.miscellaneous.labels,
       },
-      // formData.miscellaneous.labels.length > 0
-      //   ? formData.miscellaneous
-      //   : undefined,
       creationDate: new Date(formData.issuedOn).toISOString(),
       invoiceNumber: formData.invoiceNumber,
       note: formData.note.length > 0 ? formData.note : undefined,

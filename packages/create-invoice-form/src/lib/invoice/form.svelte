@@ -12,6 +12,7 @@
     inputDateFormat,
     type CustomFormData,
     type IConfig,
+    AutoComplete,
   } from "@requestnetwork/shared";
 
   export let config: IConfig;
@@ -91,7 +92,16 @@
 
       (formData.items[itemIndex] as any)[fieldName] = value;
     } else {
-      if (id in formData) {
+      if (id in formData!) {
+        (formData as any)[id] = value;
+      }
+      // Workaround.
+      // This code block to fix an issue: id could not found in formData
+      if (
+        ["expectedStartDate", "expectedFlowRate", "maxInputAmount"].indexOf(
+          id,
+        ) !== -1
+      ) {
         (formData as any)[id] = value;
       }
     }
@@ -115,6 +125,23 @@
   const removeInvoiceItem = (index: number) => {
     formData.items = formData.items.filter((_, i) => i !== index);
   };
+
+  // let suggestions = ["aaa", "bbb"]
+  // let filteredSuggestions: any[] = [];
+  // let showSuggestions = false;
+  // let query = "";
+  // function handleAutoCompleteInput(event: Event) {
+  //       let target = event.target as HTMLInputElement;
+  //       query = target.value;
+  //       if (query.length > 0) {
+  //           filteredSuggestions = suggestions.filter(item =>
+  //               item.toLowerCase().includes(query.toLowerCase())
+  //           );
+  //           showSuggestions = true;
+  //       } else {
+  //           showSuggestions = false;
+  //       }
+  //   }
 </script>
 
 <form class="invoice-form">
@@ -143,6 +170,8 @@
             label="From"
             placeholder="Connect wallet to populate"
           />
+
+        
           <Accordion title="Add Your Info">
             <div class="invoice-form-info">
               <Input
@@ -229,6 +258,20 @@
             {handleInput}
             onBlur={checkClientAddress}
           />
+
+            <!-- <AutoComplete
+            
+            id="creatorId"
+            type="text"
+            value={creatorId}
+            label="From"
+            placeholder="Connect wallet to populate"
+            suggestions={["aa", "bb"]}
+            handleInput={handleAutoCompleteInput}
+            bind:query
+            bind:filteredSuggestions
+            bind:showSuggestions
+          /> -->
           {#if clientAddressError}
             <p class="error-address">Please enter a valid Ethereum address</p>
           {/if}
@@ -347,6 +390,14 @@
               }))}
               onchange={handleSwapCurrencyChange}
             />
+            <Input
+              id="maxInputAmount"
+              type="number"
+              value={formData.maxInputAmount}
+              label="Maximum token amount to be swapped"
+              placeholder="1"
+              {handleInput}
+            />
           {:else if selectedRequestType === "3"}
             <!-- Add conversion -->
             <Dropdown
@@ -357,6 +408,14 @@
                 { label: "EUR", value: "EUR" },
               ]}
               onchange={handleFiatChange}
+            />
+            <Input
+              id="maxInputAmount"
+              type="number"
+              value={formData.maxInputAmount}
+              label="Maximum token amount that can be used to convert to FIAT"
+              placeholder="1"
+              {handleInput}
             />
           {:else if selectedRequestType === "4"}
             <!-- Add conversion -->
@@ -379,31 +438,43 @@
               }))}
               onchange={handleSwapCurrencyChange}
             />
+            <Input
+              id="maxInputAmount"
+              type="number"
+              value={formData.maxInputAmount}
+              label="Maximum token amount to be swapped"
+              placeholder="1"
+              {handleInput}
+            />
           {:else if selectedRequestType === "5"}
-           <span></span>
+            <span></span>
           {:else if selectedRequestType === "6"}
             <!--Stream-->
             <Input
               id="expectedStartDate"
-              type="date"
-              value={inputDateFormat(new Date())}
+              type="datetime-local"
+              min={new Date(formData.issuedOn).toLocaleString()}
+              value={formData.expectedStartDate}
               label="Expected start date"
               {handleInput}
             />
             <Input
               id="expectedFlowRate"
               type="number"
-              value={0.1}
+              value={formData.expectedFlowRate}
               label="Expected flow rate"
+              placeholder="0.1"
               {handleInput}
             />
             <Dropdown
               {config}
               placeholder="Select stream tokens"
-              options={Array.from(streamTokens.entries()).map(([key, value]) => ({
-                value: key,
-                label: `${value.symbol} (${value.network})`,
-              }))}
+              options={Array.from(streamTokens.entries()).map(
+                ([key, value]) => ({
+                  value: key,
+                  label: `${value.symbol} (${value.network})`,
+                }),
+              )}
               onchange={handleStreamTokenChange}
             />
           {/if}

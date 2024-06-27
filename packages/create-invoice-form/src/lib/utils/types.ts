@@ -9,4 +9,8 @@ export interface IRequestParams {
     };
     signer: string;
     currencies: any;
+    swapCurrency?: string,
+    fiat?: string,
+    streamToken?: string,
+    streamTokens?: any
 }

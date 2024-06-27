@@ -1,8 +1,17 @@
 <svelte:options customElement="create-invoice-form" />
 
 <script lang="ts">
-  import { getInitialFormData, prepareStreamRequestParams } from "$utils";
+  import {
+      getInitialFormData,
+      prepareConversionRequestParams,
+      prepareEscrowRequestParams,
+      prepareRequestParams,
+      prepareStreamRequestParams,
+      prepareSwapToPayAnyRequestParams,
+      prepareSwapToPayRequestParams,
+  } from "$utils";
   import type { RequestNetwork } from "@requestnetwork/request-client.js";
+  import type { ICreateRequestParameters } from "@requestnetwork/request-client.js/dist/types";
   import {
       APP_STATUS,
       Button,
@@ -89,7 +98,7 @@
 
   const handleStreamTokenChange = (value: string) => {
     streamToken = value;
-  }
+  };
   let invoiceTotals = {
     amountWithoutTax: 0,
     totalTaxAmount: 0,
@@ -159,66 +168,84 @@
     formData.miscellaneous.builderId = activeConfig?.builderId || "";
     formData.miscellaneous.createdWith = window.location.hostname;
     console.log("Original request params:");
-    console.log("Signer:", signer);
     console.log("formData:", formData);
-    console.log("currency:", currency);
-    console.log("currencies:", currencies);
-    console.log("invoiceTotals:", invoiceTotals);
-    console.log("End");
-    // const requestCreateParameters = prepareRequestParams({
-    //   signer,
-    //   formData,
-    //   currency,
-    //   currencies,
-    //   invoiceTotals,
-    // });
-    // const requestCreateParameters = prepareSwapToPayRequestParams({
-    //   signer,
-    //   formData,
-    //   currency,
-    //   currencies,
-    //   invoiceTotals,
-    // });
 
-    // Still error at this line:
-    // https://github.com/RequestNetwork/requestNetwork/blob/1d4eccee2f59e8a93d275f5ef1b498c195493205/packages/smart-contracts/src/contracts/ERC20EscrowToPay.sol#L205
-    // But if we use ERC20FeeProxy instead of ERC20EscrowToPay then the transaction can be executed
-    // ERC20FeeProxy: https://sepolia.etherscan.io/address/0x399F5EE127ce7432E4921a61b8CF52b0af52cbfE#writeContract
-    // const requestCreateParameters = prepareEscrowRequestParams({
-    //   signer,
-    //   formData,
-    //   currency,
-    //   currencies,
-    //   invoiceTotals,
-    // });
-    // const requestCreateParameters = prepareConversionRequestParams({
-    //   signer,
-    //   formData,
-    //   currency,
-    //   currencies,
-    //   invoiceTotals,
-    // });
+    let requestCreateParameters: ICreateRequestParameters;
 
-    // const requestCreateParameters = prepareSwapToPayAnyRequestParams({
-    //   signer,
-    //   formData,
-    //   currency,
-    //   currencies,
-    //   invoiceTotals,
-    // });
-    const requestCreateParameters = prepareStreamRequestParams({
-      signer,
-      formData,
-      currency,
-      currencies,
-      invoiceTotals,
-    });
+    switch (selectedRequestType) {
+      case "2": {
+        requestCreateParameters = prepareSwapToPayRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+          swapCurrency
+        });
+        break;
+      }
+
+      case "3": {
+        requestCreateParameters = prepareConversionRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+          fiat
+        });
+        break;
+      }
+      case "4": {
+        requestCreateParameters = prepareSwapToPayAnyRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+          swapCurrency,
+          fiat
+        });
+        break;
+      }
+      case "5": {
+        requestCreateParameters = prepareEscrowRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+        });
+        break;
+      }
+      case "6": {
+        requestCreateParameters = prepareStreamRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+          streamToken,
+          streamTokens
+        });
+        break;
+      }
+      default:
+        requestCreateParameters = prepareRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+        });
+        break;
+    }
+    
 
     console.log("Prepared request params:");
     console.log("Request Info:", requestCreateParameters.requestInfo);
     console.log("Payment Network:", requestCreateParameters.paymentNetwork);
     console.log("Content Data:", requestCreateParameters.contentData);
-    console.log("Signer:", requestCreateParameters.signer);
     console.log("End");
 
     if (requestNetwork) {

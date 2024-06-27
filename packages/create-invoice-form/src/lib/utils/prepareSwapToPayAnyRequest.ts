@@ -1,6 +1,7 @@
+import { utils } from "@requestnetwork/payment-processor";
 import { Types, Utils } from "@requestnetwork/request-client.js";
-
 import type { IRequestParams } from "./types";
+import { parseUnits } from "viem";
 
 // Test Swap to pay
 export const prepareSwapToPayAnyRequestParams = ({
@@ -9,11 +10,13 @@ export const prepareSwapToPayAnyRequestParams = ({
   formData,
   currencies,
   invoiceTotals,
+  swapCurrency,
+  fiat
 }: IRequestParams): Types.ICreateRequestParameters => ({
   requestInfo: {
     currency: {
       type: Types.RequestLogic.CURRENCY.ISO4217,
-      value: "USD",
+      value: fiat || "USD",
     },
     expectedAmount: invoiceTotals.totalAmount,
     payee: {
@@ -51,8 +54,11 @@ export const prepareSwapToPayAnyRequestParams = ({
       },
       swapSettings: {
         deadline: 2599732187000, // This test will fail in 2052
-        maxInputAmount: 30 * 10*6,//parseEther('5000').toString(),
-        path: ["0x1c7d4b196cb0c7b01d743fbc6116a902379c7238", currencies.get(currency)!.value],
+        maxInputAmount: parseUnits(
+          formData.maxInputAmount?.toString() || "1",
+          currencies.get(swapCurrency)!.decimals
+        ).toString(),
+        path: [currencies.get(swapCurrency)!.value, currencies.get(currency)!.value],
       },
       labels: formData.miscellaneous.labels
     },

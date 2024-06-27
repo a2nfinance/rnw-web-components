@@ -1,7 +1,6 @@
-import { utils } from "@requestnetwork/payment-processor";
 import { Types, Utils } from "@requestnetwork/request-client.js";
+import { parseUnits, zeroAddress } from "viem";
 import type { IRequestParams } from "./types";
-import { zeroAddress } from "viem";
 // 1000 => 10.00 EURO
 // Fiat has decimals is 2
 // For test
@@ -11,6 +10,7 @@ export const prepareConversionRequestParams = ({
     formData,
     currencies,
     invoiceTotals,
+    fiat
 }: IRequestParams): Types.ICreateRequestParameters => {
     let paymentNetwork: any = {
         id: Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ERC20_PROXY,
@@ -34,13 +34,13 @@ export const prepareConversionRequestParams = ({
             },
         };
     }
-    
+
     return {
         requestInfo: {
             // Need to get from FormData
             currency: {
                 type: Types.RequestLogic.CURRENCY.ISO4217,
-                value: "USD"
+                value: fiat || "USD"
             },
             expectedAmount: invoiceTotals.totalAmount,
             payee: {
@@ -66,7 +66,10 @@ export const prepareConversionRequestParams = ({
                         value: currencies.get(currency)!.value,
                         network: currencies.get(currency)!.network,
                     },
-                    maxToSpend: `${utils.MAX_ALLOWANCE}`,
+                    maxToSpend: parseUnits(
+                        formData.maxInputAmount?.toString() || "1",
+                        currencies.get(currency)!.decimals
+                    ).toString(),
                 },
                 labels: formData.miscellaneous.labels,
             },
