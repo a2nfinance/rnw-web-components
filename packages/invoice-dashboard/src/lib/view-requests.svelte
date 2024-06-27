@@ -11,7 +11,6 @@
       getRequestType,
       getSymbol,
   } from "$src/utils";
-  import { getErc777Currencies } from "$src/utils/erc777-stream-utils";
   import type { RequestNetwork } from "@requestnetwork/request-client.js";
   import { Types } from "@requestnetwork/request-client.js";
   import {
@@ -27,6 +26,7 @@
       Skeleton,
       config as defaultConfig,
       type IConfig,
+      getErc777Currencies
   } from "@requestnetwork/shared";
   import type { WalletState } from "@web3-onboard/core";
   import { onMount } from "svelte";

@@ -46,34 +46,6 @@ export const spConfigs = new Map<string, { resolverAddress: string }>([
 
 ]);
 
-
-
-export const erc777Sepolia = new Map<string, ICurrency>([
-    [
-       
-            "11155111_0xb598E6C621618a9f63788816ffb50Ee2862D443B",
-            {
-                name: "Super fUSDC Fake Token",
-                symbol: "fUSDCx",
-                value: "0xb598E6C621618a9f63788816ffb50Ee2862D443B",
-                chainId: 11155111,
-                network: "sepolia",
-                decimals: 18,
-                type: Types.RequestLogic.CURRENCY.ERC777,
-            }
-        
-
-    ],
-]);
-
-export const getErc777Currencies = (network: string) => {
-    if (network === "sepolia") {
-        return erc777Sepolia;
-    }
-
-    return new Map<string, ICurrency>([]);
-}
-
 // Default library not support custom chains.
 // Not support singleton pattern when creating Framework instance.
 // This custom function does that.
