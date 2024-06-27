@@ -32,7 +32,7 @@ export const spConfigs = new Map<string, { resolverAddress: string }>([
 
     ],
     [
-        "ethereum",
+        "mainnet",
         {
             resolverAddress: "0xeE4cD028f5fdaAdeA99f8fc38e8bA8A57c90Be53"
         }

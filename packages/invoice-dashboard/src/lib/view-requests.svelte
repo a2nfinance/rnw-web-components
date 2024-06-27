@@ -4,34 +4,35 @@
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <script lang="ts">
   import {
-    Copy,
-    Input,
-    Search,
-    Dropdown,
-    Skeleton,
-    PoweredBy,
-    ChevronUp,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    type IConfig,
-    config as defaultConfig,
+      checkNetwork,
+      debounce,
+      formatAddress,
+      getDecimals,
+      getRequestType,
+      getSymbol,
+  } from "$src/utils";
+  import { getErc777Currencies } from "$src/utils/erc777-stream-utils";
+  import type { RequestNetwork } from "@requestnetwork/request-client.js";
+  import { Types } from "@requestnetwork/request-client.js";
+  import {
+      ChevronDown,
+      ChevronLeft,
+      ChevronRight,
+      ChevronUp,
+      Copy,
+      Dropdown,
+      Input,
+      PoweredBy,
+      Search,
+      Skeleton,
+      config as defaultConfig,
+      type IConfig,
   } from "@requestnetwork/shared";
+  import type { WalletState } from "@web3-onboard/core";
   import { onMount } from "svelte";
   import { formatUnits } from "viem";
   import { Drawer, InvoiceView, InvoiceViewConversion } from "./dashboard";
-  import type { WalletState } from "@web3-onboard/core";
-  import { Types } from "@requestnetwork/request-client.js";
-  import type { RequestNetwork } from "@requestnetwork/request-client.js";
-  import {
-    debounce,
-    getSymbol,
-    getDecimals,
-    formatAddress,
-    checkNetwork,
-  } from "$src/utils";
   import InvoiceViewStream from "./dashboard/invoice-view-stream.svelte";
-  import { getErc777Currencies } from "$src/utils/erc777-stream-utils";
 
   export let config: IConfig;
   export let wallet: WalletState;
@@ -370,6 +371,17 @@
                   </i>
                 </div>
               </th>
+              <th on:click={() => handleSort("requestType")}>
+                <div>
+                  Type<i class={`caret `}>
+                    {#if sortOrder === "asc" && sortColumn === "requestType"}
+                      <ChevronUp />
+                    {:else}
+                      <ChevronDown />
+                    {/if}
+                  </i>
+                </div>
+              </th>
               <th on:click={() => handleSort("state")}>
                 <div>
                   Status<i class={`caret `}>
@@ -476,6 +488,7 @@
                       {request.expectedAmount} {request.currency}
                     {/if}
                   </td>
+                  <td> {getRequestType(request)}</td>
                   <td> {checkStatus(request)}</td>
                 </tr>
               {/each}
