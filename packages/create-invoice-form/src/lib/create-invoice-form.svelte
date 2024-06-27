@@ -1,25 +1,20 @@
 <svelte:options customElement="create-invoice-form" />
 
 <script lang="ts">
+  import { getInitialFormData, prepareStreamRequestParams } from "$utils";
+  import type { RequestNetwork } from "@requestnetwork/request-client.js";
   import {
-    APP_STATUS,
-    getCurrenciesByNetwork,
-    calculateInvoiceTotals,
-    config as defaultConfig,
-    type IConfig,
+      APP_STATUS,
+      Button,
+      Modal,
+      Status,
+      calculateInvoiceTotals,
+      config as defaultConfig,
+      getCurrenciesByNetwork,
+      getErc777Currencies,
+      type IConfig,
   } from "@requestnetwork/shared";
   import { InvoiceForm, InvoiceView } from "./invoice";
-  import { Modal, Button, Status } from "@requestnetwork/shared";
-  import {
-    getInitialFormData,
-    prepareRequestParams,
-    prepareEscrowRequestParams,
-    prepareSwapToPayAnyRequestParams,
-    prepareConversionRequestParams,
-    prepareSwapToPayRequestParams,
-    prepareStreamRequestParams,
-  } from "$utils";
-  import type { RequestNetwork } from "@requestnetwork/request-client.js";
 
   export let config: IConfig;
   export let signer: string = "";
@@ -53,10 +48,16 @@
       network = selectedNetwork;
 
       const newCurrencies = getCurrenciesByNetwork(selectedNetwork.chainId);
+      const newStreamTokens = getErc777Currencies(selectedNetwork.chainId);
 
       currencies = newCurrencies;
+      streamTokens = newStreamTokens;
+
+      console.log(streamTokens);
 
       currency = newCurrencies.keys().next().value;
+      swapCurrency = newCurrencies.keys().next().value;
+      streamToken = newStreamTokens.keys().next().value;
     }
   };
 
@@ -64,10 +65,13 @@
   let appStatus: APP_STATUS[] = [];
   let formData = getInitialFormData();
   let currencies = getCurrenciesByNetwork(network.chainId) || new Map();
+  let streamTokens = getErc777Currencies(network.chainId) || new Map();
 
   $: {
     currencies = getCurrenciesByNetwork(network.chainId);
+    streamTokens = getErc777Currencies(network.chainId);
     currency = currencies.keys().next().value;
+    swapCurrency = currencies.keys().next().value;
   }
   let currency = currencies.keys().next().value;
 
@@ -75,6 +79,17 @@
     currency = value;
   };
 
+  let swapCurrency = currencies.keys().next().value;
+
+  const handleSwapCurrencyChange = (value: string) => {
+    swapCurrency = value;
+  };
+
+  let streamToken = streamTokens.keys().next().value;
+
+  const handleStreamTokenChange = (value: string) => {
+    streamToken = value;
+  }
   let invoiceTotals = {
     amountWithoutTax: 0,
     totalTaxAmount: 0,
@@ -126,6 +141,16 @@
 
   const handleCloseInvoiceModal = () => {
     removeAllStatuses();
+  };
+
+  let selectedRequestType = "1";
+  const handleRequestTypeChange = (requestType: string) => {
+    selectedRequestType = requestType;
+  };
+
+  let fiat = "USD";
+  const handleFiatChange = (value: string) => {
+    fiat = value;
   };
 
   const submitForm = async (e: Event) => {
@@ -225,10 +250,16 @@
       bind:formData
       config={activeConfig}
       bind:currencies
+      bind:streamTokens
+      bind:selectedRequestType
       bind:payeeAddressError
       bind:clientAddressError
+      {handleRequestTypeChange}
       {handleCurrencyChange}
+      {handleFiatChange}
+      {handleSwapCurrencyChange}
       {handleNetworkChange}
+      {handleStreamTokenChange}
       {networks}
     />
     <div class="invoice-view-wrapper">
@@ -236,11 +267,16 @@
         config={activeConfig}
         {currency}
         {network}
+        {swapCurrency}
+        {fiat}
+        {selectedRequestType}
+        {streamToken}
         bind:formData
         bind:canSubmit
         {invoiceTotals}
         {submitForm}
         bind:currencies
+        bind:streamTokens
       />
     </div>
   </div>

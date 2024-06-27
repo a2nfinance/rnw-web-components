@@ -1,27 +1,32 @@
 <script lang="ts">
   import {
-    Input,
-    Button,
-    Labels,
-    Dropdown,
     Accordion,
-    inputDateFormat,
-    calculateItemTotal,
-    type IConfig,
-    type CustomFormData,
-    Trash,
+    Button,
+    Dropdown,
+    Input,
+    Labels,
     Plus,
+    Trash,
+    calculateItemTotal,
     checkAddress,
+    inputDateFormat,
+    type CustomFormData,
+    type IConfig,
   } from "@requestnetwork/shared";
 
   export let config: IConfig;
   export const invoiceNumber: number = 1;
   export let formData: CustomFormData;
   export let handleCurrencyChange: (value: string) => void;
-
+  export let handleSwapCurrencyChange: (value: string) => void;
   export let handleNetworkChange: (chainId: string) => void;
+  export let handleRequestTypeChange: (requestType: string) => void;
+  export let handleFiatChange: (value: string) => void;
+  export let handleStreamTokenChange: (value: string) => void;
   export let networks;
+  export let selectedRequestType = "1";
   export let currencies = new Map();
+  export let streamTokens = new Map();
   export let payeeAddressError = false;
   export let clientAddressError = false;
 
@@ -302,27 +307,121 @@
             </div>
           </Accordion>
         </div>
-        <Dropdown
-          {config}
-          placeholder="Select payment chain"
-          options={networks.map((network) => {
-            return {
-              value: network.chainId,
-              label: network.name,
-            };
-          })}
-          onchange={handleNetworkChange}
-        />
 
-        <Dropdown
-          {config}
-          placeholder="Select a currency"
-          options={Array.from(currencies.entries()).map(([key, value]) => ({
-            value: key,
-            label: `${value.symbol} (${value.network})`,
-          }))}
-          onchange={handleCurrencyChange}
-        />
+        <div class="invoice-form-section">
+          <legend>Payment information</legend>
+
+          <Dropdown
+            {config}
+            placeholder="Select request type"
+            options={[
+              { label: "Simple request", value: "1" },
+              { label: "Swap-to-Pay Request ", value: "2" },
+              { label: "Conversion Request", value: "3" },
+              { label: "Swap-to-Conversion Request", value: "4" },
+              { label: "Escrow Request", value: "5" },
+              { label: "Stream Request", value: "6" },
+            ]}
+            onchange={handleRequestTypeChange}
+          />
+          <Dropdown
+            {config}
+            placeholder="Select payment chain"
+            options={networks.map((network) => {
+              return {
+                value: network.chainId,
+                label: network.name,
+              };
+            })}
+            onchange={handleNetworkChange}
+          />
+
+          {#if selectedRequestType === "2"}
+            <!-- Swap token -->
+            <Dropdown
+              {config}
+              placeholder="Select a token to swap"
+              options={Array.from(currencies.entries()).map(([key, value]) => ({
+                value: key,
+                label: `${value.symbol} (${value.network})`,
+              }))}
+              onchange={handleSwapCurrencyChange}
+            />
+          {:else if selectedRequestType === "3"}
+            <!-- Add conversion -->
+            <Dropdown
+              {config}
+              placeholder="Select Fiat currency"
+              options={[
+                { label: "USD", value: "USD" },
+                { label: "EUR", value: "EUR" },
+              ]}
+              onchange={handleFiatChange}
+            />
+          {:else if selectedRequestType === "4"}
+            <!-- Add conversion -->
+            <Dropdown
+              {config}
+              placeholder="Select Fiat currency"
+              options={[
+                { label: "USD", value: "USD" },
+                { label: "EUR", value: "EUR" },
+              ]}
+              onchange={handleFiatChange}
+            />
+            <!-- Swap token -->
+            <Dropdown
+              {config}
+              placeholder="Select a token to swap"
+              options={Array.from(currencies.entries()).map(([key, value]) => ({
+                value: key,
+                label: `${value.symbol} (${value.network})`,
+              }))}
+              onchange={handleSwapCurrencyChange}
+            />
+          {:else if selectedRequestType === "5"}
+           <span></span>
+          {:else if selectedRequestType === "6"}
+            <!--Stream-->
+            <Input
+              id="expectedStartDate"
+              type="date"
+              value={inputDateFormat(new Date())}
+              label="Expected start date"
+              {handleInput}
+            />
+            <Input
+              id="expectedFlowRate"
+              type="number"
+              value={0.1}
+              label="Expected flow rate"
+              {handleInput}
+            />
+            <Dropdown
+              {config}
+              placeholder="Select stream tokens"
+              options={Array.from(streamTokens.entries()).map(([key, value]) => ({
+                value: key,
+                label: `${value.symbol} (${value.network})`,
+              }))}
+              onchange={handleStreamTokenChange}
+            />
+          {/if}
+          {#if selectedRequestType !== "6"}
+            <Dropdown
+              {config}
+              placeholder="Select payment currency"
+              options={Array.from(currencies.entries()).map(([key, value]) => ({
+                value: key,
+                label: `${value.symbol} (${value.network})`,
+              }))}
+              onchange={handleCurrencyChange}
+            />
+          {/if}
+
+          <p />
+        </div>
+
         <Input
           label="Where do you want to receive your payment?"
           id="payeeAddress"
@@ -350,7 +449,7 @@
         type="date"
         min={inputDateFormat(formData.issuedOn)}
         value={inputDateFormat(
-          new Date(new Date(formData.issuedOn).getTime() + 24 * 60 * 60 * 1000)
+          new Date(new Date(formData.issuedOn).getTime() + 24 * 60 * 60 * 1000),
         )}
         label="Due Date"
         {handleInput}
