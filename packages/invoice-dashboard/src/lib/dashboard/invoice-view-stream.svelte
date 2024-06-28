@@ -8,7 +8,8 @@
         payErc777StreamRequest,
         walletClientToSigner,
     } from "$src/utils";
-    import { getErc777Currencies } from "$src/utils/erc777-stream-utils";
+    import { getPaymentNetworkExtension } from "@requestnetwork/payment-detection";
+
     import type {
         RequestNetwork,
         Types,
@@ -19,6 +20,7 @@
         Check,
         calculateItemTotal,
         formatDate,
+        getErc777Currencies,
     } from "@requestnetwork/shared";
     import type { WalletState } from "@web3-onboard/core";
     import { formatUnits } from "viem";
@@ -33,7 +35,7 @@
     let currency = currencies.get(
         `${checkNetwork(network)}_${request?.currencyInfo?.value}`,
     );
-
+    let paymentInfo = getPaymentNetworkExtension(request!)?.values;
     let statuses: any = [];
     let isPaid = false;
     let loading = false;
@@ -273,6 +275,14 @@
     <h3 class="invoice-info-payment">
         <span style="font-weight: 500;">Payment Chain:</span>
         {currency?.network}
+    </h3>
+    <h3 class="invoice-info-payment">
+        <span style="font-weight: 500;">Expected start date:</span>
+        {new Date(parseInt(paymentInfo.expectedStartDate)).toLocaleString()}
+    </h3>
+    <h3 class="invoice-info-payment">
+        <span style="font-weight: 500;">Expected flow rate:</span>
+        {formatUnits(paymentInfo.expectedFlowRate, 18)}
     </h3>
     <h3 class="invoice-info-payment">
         <span style="font-weight: 500;">Invoice Currency:</span>

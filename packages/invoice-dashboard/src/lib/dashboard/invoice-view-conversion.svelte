@@ -1,6 +1,5 @@
 <script lang="ts">
     import { checkNetwork, getSymbol, walletClientToSigner } from "$src/utils";
-    import { CurrencyManager } from "@requestnetwork/currency";
     import { getPaymentNetworkExtension } from "@requestnetwork/payment-detection";
     import {
         approveErc20ForProxyConversionIfNeeded,
@@ -35,6 +34,7 @@
 
     let conversionSettings =
         request?.contentData?.miscellaneous?.conversionSettings;
+    let swapSettings = request?.contentData?.miscellaneous?.swapSettings;
     let network = conversionSettings?.currency?.network || "mainnet";
     let currencies = getCurrenciesByNetwork(network);
     let currency = currencies.get(
@@ -424,18 +424,29 @@
         <span style="font-weight: 500;">Payment Chain:</span>
         {currency?.network}
     </h3>
-    <h3 class="invoice-info-payment">
-        <span style="font-weight: 500;">Invoice Currency:</span>
-        {request?.currencyInfo.value}
-    </h3>
 
+    {#if swapSettings}
+        <h3 class="invoice-info-payment">
+            <span style="font-weight: 500;">Currency In:</span>
+            {getSymbol(
+                conversionSettings?.currency?.network ?? "",
+                swapSettings?.path[0] ?? "",
+            )}
+        </h3>
+    {/if}
     <h3 class="invoice-info-payment">
-        <span style="font-weight: 500;">Convert to token:</span>
+        <span style="font-weight: 500;">Currency Out:</span>
         {getSymbol(
             conversionSettings?.currency?.network ?? "",
             conversionSettings?.currency?.value ?? "",
         )}
     </h3>
+    
+    <h3 class="invoice-info-payment">
+        <span style="font-weight: 500;">Invoice Currency:</span>
+        {request?.currencyInfo.value}
+    </h3>
+    
 
     {#if request?.contentData?.invoiceItems}
         <div class="table-container">

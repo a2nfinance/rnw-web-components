@@ -12,12 +12,12 @@ const requestTypes = {
 export const getRequestType = (requestData: Types.IRequestDataWithEvents) => {
     let paymentId = getPaymentNetworkExtension(requestData)?.id;
     let requestType = "";
-    let miscellaneous = requestData.contentData.miscellaneous;
+    let miscellaneous = requestData?.contentData?.miscellaneous;
     switch (paymentId) {
         case Types.Extension.PAYMENT_NETWORK_ID.ERC20_FEE_PROXY_CONTRACT: {
-            if (miscellaneous.swapSettings) {
+            if (miscellaneous?.swapSettings) {
                 requestType = requestTypes.swapToPay;
-            } else if (miscellaneous.escrowSettings) {
+            } else if (miscellaneous?.escrowSettings) {
                 requestType = requestTypes.escrow;
             } else {
                 requestType = requestTypes.simple;
@@ -25,9 +25,9 @@ export const getRequestType = (requestData: Types.IRequestDataWithEvents) => {
             break;
         }
         case Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ERC20_PROXY: {
-            if (miscellaneous.conversionSettings && !miscellaneous.swapSettings) {
+            if (miscellaneous?.conversionSettings && !miscellaneous?.swapSettings) {
                 requestType = requestTypes.conversion;
-            } else if (miscellaneous.conversionSettings && miscellaneous.swapSettings) {
+            } else if (miscellaneous?.conversionSettings && miscellaneous?.swapSettings) {
                 requestType = requestTypes.swapToConversion;
             } else {
                 requestType = requestTypes.simple;

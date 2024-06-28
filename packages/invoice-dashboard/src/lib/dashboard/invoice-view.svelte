@@ -1,33 +1,33 @@
 <script lang="ts">
   import {
-      checkNetwork,
-      getDecimals,
-      getSymbol,
-      walletClientToSigner,
+    checkNetwork,
+    getDecimals,
+    getSymbol,
+    walletClientToSigner,
   } from "$src/utils";
   import { getPaymentNetworkExtension } from "@requestnetwork/payment-detection";
   import {
-      Escrow,
-      UnsupportedNetworkError,
-      approveErc20,
-      approveErc20ForSwapToPayIfNeeded,
-      hasApprovalErc20ForSwapToPay,
-      hasErc20Approval,
-      payRequest,
-      swapToPayRequest,
-      type ISwapSettings
+    Escrow,
+    UnsupportedNetworkError,
+    approveErc20,
+    approveErc20ForSwapToPayIfNeeded,
+    hasApprovalErc20ForSwapToPay,
+    hasErc20Approval,
+    payRequest,
+    swapToPayRequest,
+    type ISwapSettings,
   } from "@requestnetwork/payment-processor";
   import {
-      Types,
-      type RequestNetwork,
+    Types,
+    type RequestNetwork,
   } from "@requestnetwork/request-client.js";
   import {
-      Accordion,
-      Button,
-      Check,
-      calculateItemTotal,
-      formatDate,
-      getCurrenciesByNetwork,
+    Accordion,
+    Button,
+    Check,
+    calculateItemTotal,
+    formatDate,
+    getCurrenciesByNetwork,
   } from "@requestnetwork/shared";
   import type { WalletState } from "@web3-onboard/core";
   import { formatUnits } from "viem";
@@ -42,7 +42,7 @@
   let currency = currencies.get(
     `${checkNetwork(network)}_${request?.currencyInfo?.value}`,
   );
-
+  let swapSettings = request?.contentData?.miscellaneous?.swapSettings;
   let statuses: any = [];
   let isPaid = false;
   let loading = false;
@@ -384,13 +384,31 @@
     <span style="font-weight: 500;">Payment Chain:</span>
     {currency?.network}
   </h3>
-  <h3 class="invoice-info-payment">
-    <span style="font-weight: 500;">Invoice Currency:</span>
-    {getSymbol(
-      request?.currencyInfo.network ?? "",
-      request?.currencyInfo.value ?? "",
-    )}
-  </h3>
+
+  {#if swapSettings}
+    <h3 class="invoice-info-payment">
+      <span style="font-weight: 500;">Currency In:</span>
+      {getSymbol(
+        request?.currencyInfo.network ?? "",
+        swapSettings?.path[0] ?? "",
+      )}
+    </h3>
+    <h3 class="invoice-info-payment">
+      <span style="font-weight: 500;">Currency out:</span>
+      {getSymbol(
+        request?.currencyInfo.network ?? "",
+        request?.currencyInfo.value ?? "",
+      )}
+    </h3>
+  {:else}
+    <h3 class="invoice-info-payment">
+      <span style="font-weight: 500;">Invoice Currency:</span>
+      {getSymbol(
+        request?.currencyInfo.network ?? "",
+        request?.currencyInfo.value ?? "",
+      )}
+    </h3>
+  {/if}
 
   {#if request?.contentData?.invoiceItems}
     <div class="table-container">
