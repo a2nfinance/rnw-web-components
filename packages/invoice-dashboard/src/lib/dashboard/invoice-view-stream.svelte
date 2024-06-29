@@ -29,7 +29,9 @@
     export let wallet: WalletState | undefined;
     export let requestNetwork: RequestNetwork | null | undefined;
     export let request: Types.IRequestDataWithEvents | undefined;
-
+    let progress: number = 0;
+    let releaseAmount: number = 0;
+    let latestStream: any = null;
     let network = request?.currencyInfo?.network || "mainnet";
     let currencies = getErc777Currencies(network);
     let currency = currencies.get(
@@ -123,8 +125,41 @@
             );
             signer = walletClientToSigner(wallet);
             requestData = singleRequest?.getData();
-            console.log("Request Data:", requestData);
-            streamExisted = await checkExisted(requestData, signer);
+            let existedStreams = await checkExisted(requestData, signer);
+            streamExisted = existedStreams.existed;
+            latestStream = existedStreams.data?.[0];
+
+            // Calculate progress percentage
+            let startTime = latestStream.createdAtTimestamp;
+            let flowRate = parseFloat(
+                formatUnits(latestStream.currentFlowRate, currency?.decimals!),
+            );
+            let expectedAmount = parseFloat(
+                formatUnits(requestData.expectedAmount, currency?.decimals!),
+            );
+            if (streamExisted) {
+                const interval = setInterval(() => {
+                    if (progress < 100) {
+                        let currentTime = new Date().getTime();
+
+                        if (startTime * 1000 < currentTime) {
+                            let calculatedReleaseAmount =
+                                (flowRate * (currentTime - startTime * 1000)) /
+                                1000;
+                            releaseAmount =
+                                calculatedReleaseAmount > expectedAmount
+                                    ? expectedAmount
+                                    : calculatedReleaseAmount;
+                            progress = Math.floor(
+                                (releaseAmount / expectedAmount) * 100,
+                            );
+                        }
+                    } else {
+                        clearInterval(interval);
+                    }
+                }, 1000);
+            }
+
             loading = false;
         } catch (err: any) {
             loading = false;
@@ -282,12 +317,23 @@
     </h3>
     <h3 class="invoice-info-payment">
         <span style="font-weight: 500;">Expected flow rate:</span>
-        {formatUnits(paymentInfo.expectedFlowRate, 18)}
+        {formatUnits(paymentInfo.expectedFlowRate, currency?.decimals || 18)}
     </h3>
     <h3 class="invoice-info-payment">
         <span style="font-weight: 500;">Invoice Currency:</span>
         {currency?.symbol}
     </h3>
+    <h3 class="invoice-info-payment">
+        <span style="font-weight: 500;">Progress: {progress}%</span>
+    </h3>
+    <div class="progress-bar" style="--progress: {progress}%">
+        <div class="progress">
+            {releaseAmount.toFixed(4)} / {formatUnits(
+                BigInt(request?.expectedAmount.toString() || "0"),
+                currency?.decimals || 18,
+            )}
+        </div>
+    </div>
 
     {#if request?.contentData?.invoiceItems}
         <div class="table-container">
@@ -758,5 +804,23 @@
 
     .bg-zinc-light {
         background-color: #f4f4f5;
+    }
+
+    .progress-bar {
+        width: 100%;
+        background-color: #f3f3f3;
+        border-radius: 5px;
+        overflow: hidden;
+    }
+    .progress {
+        height: 10px;
+        width: var(--progress);
+        background-color: #4caf50;
+        transition: width 1s;
+        font-size: 8px;
+        color: white;
+        font-weight: bold;
+        font-style: italic;
+        text-align: center;
     }
 </style>

@@ -8,11 +8,11 @@ import type { ClientTypes } from '@requestnetwork/types';
 import { Framework } from '@superfluid-finance/sdk-core';
 import {
     ethers,
+    providers,
     type BigNumber,
     type ContractTransaction,
     type Overrides,
-    type Signer,
-    type providers
+    type Signer
 } from 'ethers';
 
 interface ICurrency extends Types.RequestLogic.ICurrency {
@@ -55,15 +55,20 @@ export async function getSuperFluidFramework(
     request: ClientTypes.IRequestData,
     provider: providers.Provider,
 ): Promise<Framework> {
-    const resolverAddress = spConfigs.get(request.currencyInfo.network?.toString() || "")?.resolverAddress;
-    const chainId = (await provider.getNetwork()).chainId;
-    // @ts-ignore
-    if (!rf || (rf.settings.chainId !== chainId)) {
-        rf = await Framework.create({
-            chainId,
-            provider: provider,
-            resolverAddress: resolverAddress
-        });
+    try {
+        const resolverAddress = spConfigs.get(request.currencyInfo.network?.toString() || "")?.resolverAddress;
+        const chainId = (await provider.getNetwork()).chainId;
+
+        // @ts-ignore
+        if (!rf || (rf.settings.chainId !== chainId)) {
+            rf = await Framework.create({
+                chainId,
+                provider: provider,
+                resolverAddress: resolverAddress
+            });
+        }
+    } catch (e) {
+        console.log("Could not create SuperFluid framework", e);
     }
     return rf;
 
@@ -75,7 +80,7 @@ export async function prepareErc777StreamPaymentTransaction(
     provider: providers.Provider,
 ): Promise<IPreparedTransaction> {
     utils.validateRequest(request, Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM);
-    const sf = await getSuperFluidFramework(request, provider);
+    const sf: Framework = await getSuperFluidFramework(request, provider);
 
     const encodedTx = await encodePayErc777StreamRequest(request, sf);
 
@@ -103,23 +108,34 @@ export async function payErc777StreamRequest(
 export async function checkExistingStream(
     request: ClientTypes.IRequestData,
     sender: string,
-    provider: providers.Provider,
-): Promise<boolean> {
-    const id = getPaymentNetworkExtension(request)?.id;
-    if (id !== Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM) {
-        throw new Error('Not a supported ERC777 payment network request');
-    }
-    utils.validateRequest(request, Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM);
-    const { paymentAddress } = getRequestPaymentValues(request);
-    let sf = await getSuperFluidFramework(request, provider);
-    const streams = await sf.query.listStreams({
-        sender,
-        receiver: paymentAddress,
-        token: request.currencyInfo.value,
-    });
+    signer: Signer,
+): Promise<{ data: any[], existed: boolean }> {
+    try {
+        const id = getPaymentNetworkExtension(request)?.id;
+        if (id !== Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM) {
+            throw new Error('Not a supported ERC777 payment network request');
+        }
+        utils.validateRequest(request, Types.Extension.PAYMENT_NETWORK_ID.ERC777_STREAM);
 
-    console.log("List streams", streams);
-    return streams.data.length > 0 && streams.data[0].currentFlowRate !== '0';
+        const { paymentAddress } = getRequestPaymentValues(request);
+        let sf = await getSuperFluidFramework(
+            request,
+            // @ts-ignore
+            signer.provider ?? utils.getProvider()
+        );
+        const streams = await sf.query.listStreams({
+            sender,
+            receiver: paymentAddress,
+            token: request.currencyInfo.value,
+        });
+        console.log("List streams:", streams.data);
+        return { data: streams.data, existed: streams.data.length > 0 && streams.data[0].currentFlowRate !== '0' };
+    } catch (e: any) {
+        console.log("Could not check existing streams", e.message);
+    }
+
+    return { data: [], existed: false };
+
 }
 
 /**
@@ -269,7 +285,7 @@ export async function closeErc777StreamRequest(
         await signer.getAddress(),
         request,
         //@ts-ignore
-        signer.provider ?? getProvider(),
+        signer.provider ?? utils.getProvider(),
     );
     return signer.sendTransaction({ data, to, value, ...overrides });
 }
