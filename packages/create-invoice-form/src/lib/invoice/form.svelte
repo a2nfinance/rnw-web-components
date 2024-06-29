@@ -12,8 +12,8 @@
     inputDateFormat,
     type CustomFormData,
     type IConfig,
-    AutoComplete,
   } from "@requestnetwork/shared";
+  import { onMount } from "svelte";
 
   export let config: IConfig;
   export const invoiceNumber: number = 1;
@@ -30,6 +30,8 @@
   export let streamTokens = new Map();
   export let payeeAddressError = false;
   export let clientAddressError = false;
+  export let clientList: any[] = [];
+  export let useQuickBooks = false;
 
   let creatorId = "";
 
@@ -126,22 +128,50 @@
     formData.items = formData.items.filter((_, i) => i !== index);
   };
 
-  // let suggestions = ["aaa", "bbb"]
-  // let filteredSuggestions: any[] = [];
-  // let showSuggestions = false;
-  // let query = "";
-  // function handleAutoCompleteInput(event: Event) {
-  //       let target = event.target as HTMLInputElement;
-  //       query = target.value;
-  //       if (query.length > 0) {
-  //           filteredSuggestions = suggestions.filter(item =>
-  //               item.toLowerCase().includes(query.toLowerCase())
-  //           );
-  //           showSuggestions = true;
-  //       } else {
-  //           showSuggestions = false;
-  //       }
-  //   }
+  let query = "";
+  let filteredSuggestions: any = [];
+  let showSuggestions = false;
+
+  onMount(() => {
+    filteredSuggestions = clientList;
+  });
+
+  function handleAutoInput(event: Event) {
+    let elm = event.target as HTMLInputElement;
+    let query = elm.value;
+    (formData as any)["payerAddress"] = query;
+    if (query.length > 0) {
+      filteredSuggestions = clientList.filter((item) =>
+        (item.Notes + item.DisplayName + item.PrimaryEmailAddr.Address)
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+      );
+      showSuggestions = true;
+    } else {
+      showSuggestions = false;
+    }
+  }
+
+  function handleSuggestionClick(suggestion: any) {
+    query = suggestion.Notes;
+    (formData as any)["payerAddress"] = query;
+    console.log(suggestion);
+    (formData as any)["buyerInfo"]["firstName"] = suggestion.GivenName;
+    (formData as any)["buyerInfo"]["lastName"] = suggestion.FamilyName;
+    (formData as any)["buyerInfo"]["businessName"] = suggestion.CompanyName;
+    (formData as any)["buyerInfo"]["email"] =
+      suggestion.PrimaryEmailAddr.Address;
+    (formData as any)["buyerInfo"].address["country-name"] =
+      suggestion.BillAddr?.CountrySubDivisionCode;
+    (formData as any)["buyerInfo"].address.locality = suggestion.BillAddr?.City;
+    (formData as any)["buyerInfo"].address.region = suggestion.BillAddr?.City;
+    (formData as any)["buyerInfo"].address["postal-code"] =
+      suggestion.BillAddr?.PostalCode;
+    (formData as any)["buyerInfo"].address["street-address"] =
+      suggestion.BillAddr.Line1;
+    showSuggestions = false;
+    checkClientAddress();
+  }
 </script>
 
 <form class="invoice-form">
@@ -170,8 +200,6 @@
             label="From"
             placeholder="Connect wallet to populate"
           />
-
-        
           <Accordion title="Add Your Info">
             <div class="invoice-form-info">
               <Input
@@ -249,29 +277,45 @@
         </div>
 
         <div class="invoice-form-section">
-          <Input
-            label="Client information"
-            id="payerAddress"
-            type="text"
-            value={formData.payerAddress}
-            placeholder="Client Wallet Address"
-            {handleInput}
-            onBlur={checkClientAddress}
-          />
+          {#if useQuickBooks}
+            <div class="autocomplete">
+              <Input
+                label="Client information"
+                id="payerAddress"
+                type="text"
+                value={query}
+                placeholder="Client Wallet Address"
+                handleInput={handleAutoInput}
+                onBlur={checkClientAddress}
+              />
+              <!-- <input type="text" bind:value={query} on:input={handleAutoInput} /> -->
+              {#if showSuggestions}
+                <div class="suggestions">
+                  {#each filteredSuggestions as suggestion}
+                    <div
+                      class="suggestion"
+                      on:click={() => handleSuggestionClick(suggestion)}
+                    >
+                      Name: {suggestion.DisplayName} <br />
+                      Email: {suggestion.PrimaryEmailAddr.Address} <br />
+                      ETH Address: {suggestion.Notes}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {:else}
+            <Input
+              label="Client information"
+              id="payerAddress"
+              type="text"
+              value={formData.payerAddress}
+              placeholder="Client Wallet Address"
+              {handleInput}
+              onBlur={checkClientAddress}
+            />
+          {/if}
 
-            <!-- <AutoComplete
-            
-            id="creatorId"
-            type="text"
-            value={creatorId}
-            label="From"
-            placeholder="Connect wallet to populate"
-            suggestions={["aa", "bb"]}
-            handleInput={handleAutoCompleteInput}
-            bind:query
-            bind:filteredSuggestions
-            bind:showSuggestions
-          /> -->
           {#if clientAddressError}
             <p class="error-address">Please enter a valid Ethereum address</p>
           {/if}
@@ -379,11 +423,14 @@
             onchange={handleNetworkChange}
           />
 
+          <p />
+        </div>
+        <div class="invoice-form-section">
           {#if selectedRequestType === "2"}
             <!-- Swap token -->
             <Dropdown
               {config}
-              placeholder="Select a token to swap"
+              placeholder="Select currency in"
               options={Array.from(currencies.entries()).map(([key, value]) => ({
                 value: key,
                 label: `${value.symbol} (${value.network})`,
@@ -394,8 +441,7 @@
               id="maxInputAmount"
               type="number"
               value={formData.maxInputAmount}
-              label="Maximum token amount to be swapped"
-              placeholder="1"
+              placeholder="Maximum Amount In"
               {handleInput}
             />
           {:else if selectedRequestType === "3"}
@@ -413,7 +459,7 @@
               id="maxInputAmount"
               type="number"
               value={formData.maxInputAmount}
-              label="Maximum token amount that can be used to convert to FIAT"
+              label="Maximum Spend"
               placeholder="1"
               {handleInput}
             />
@@ -431,7 +477,7 @@
             <!-- Swap token -->
             <Dropdown
               {config}
-              placeholder="Select a token to swap"
+              placeholder="Select currency in"
               options={Array.from(currencies.entries()).map(([key, value]) => ({
                 value: key,
                 label: `${value.symbol} (${value.network})`,
@@ -442,7 +488,7 @@
               id="maxInputAmount"
               type="number"
               value={formData.maxInputAmount}
-              label="Maximum token amount to be swapped"
+              label="Maximum Amount In"
               placeholder="1"
               {handleInput}
             />
@@ -468,7 +514,7 @@
             />
             <Dropdown
               {config}
-              placeholder="Select stream tokens"
+              placeholder="Select payment currency"
               options={Array.from(streamTokens.entries()).map(
                 ([key, value]) => ({
                   value: key,
@@ -481,7 +527,7 @@
           {#if selectedRequestType !== "6"}
             <Dropdown
               {config}
-              placeholder="Select payment currency"
+              placeholder="Select payment currency (currency out)"
               options={Array.from(currencies.entries()).map(([key, value]) => ({
                 value: key,
                 label: `${value.symbol} (${value.network})`,
@@ -489,22 +535,23 @@
               onchange={handleCurrencyChange}
             />
           {/if}
-
           <p />
         </div>
-
-        <Input
-          label="Where do you want to receive your payment?"
-          id="payeeAddress"
-          type="text"
-          value={formData.payeeAddress}
-          placeholder="0x..."
-          {handleInput}
-          onBlur={checkPayeeAddress}
-        />
-        {#if payeeAddressError}
-          <p class="error-address">Please enter a valid Ethereum address</p>
-        {/if}
+        <div class="invoice-form-section">
+          <Input
+            label="Where do you want to receive your payment?"
+            id="payeeAddress"
+            type="text"
+            value={formData.payeeAddress}
+            placeholder="0x..."
+            {handleInput}
+            onBlur={checkPayeeAddress}
+          />
+          {#if payeeAddressError}
+            <p class="error-address">Please enter a valid Ethereum address</p>
+          {/if}
+          <p />
+        </div>
       </div>
     </div>
     <div class="invoice-form-dates">
@@ -889,5 +936,32 @@
     ) {
     width: 12px;
     height: 12px;
+  }
+
+  .autocomplete {
+    position: relative;
+    width: 100%;
+  }
+  .suggestions {
+    position: absolute;
+    /* border: 1px solid #ccc; */
+    background: #fff;
+    width: 100%;
+    box-sizing: border-box;
+    z-index: 1000;
+  }
+  .suggestion {
+    font-size: 12px;
+    border: 1px solid whitesmoke;
+    /* background-color: whitesmoke; */
+    border-radius: 5px;
+    box-shadow: 2px 5px 2px whitesmoke;
+    padding: 8px;
+    cursor: pointer;
+    box-sizing: border-box;
+    margin-bottom: 5px;
+  }
+  .suggestion:hover {
+    background-color: whitesmoke;
   }
 </style>

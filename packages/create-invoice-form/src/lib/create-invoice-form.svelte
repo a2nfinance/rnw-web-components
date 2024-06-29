@@ -27,8 +27,9 @@
 
   export let config: IConfig;
   export let signer: string = "";
+  export let clientList: any[] = [];
+  export let useQuickBooks: boolean = false;
   export let requestNetwork: RequestNetwork | null | undefined;
-
   let activeConfig = config ? config : defaultConfig;
   let mainColor = activeConfig.colors.main;
   let secondaryColor = activeConfig.colors.secondary;
@@ -180,7 +181,7 @@
           currency,
           currencies,
           invoiceTotals,
-          swapCurrency
+          swapCurrency,
         });
         break;
       }
@@ -192,7 +193,7 @@
           currency,
           currencies,
           invoiceTotals,
-          fiat
+          fiat,
         });
         break;
       }
@@ -204,7 +205,7 @@
           currencies,
           invoiceTotals,
           swapCurrency,
-          fiat
+          fiat,
         });
         break;
       }
@@ -226,7 +227,7 @@
           currencies,
           invoiceTotals,
           streamToken,
-          streamTokens
+          streamTokens,
         });
         break;
       }
@@ -240,7 +241,6 @@
         });
         break;
     }
-    
 
     console.log("Prepared request params:");
     console.log("Request Info:", requestCreateParameters.requestInfo);
@@ -276,6 +276,8 @@
     <InvoiceForm
       bind:formData
       config={activeConfig}
+      bind:useQuickBooks
+      bind:clientList
       bind:currencies
       bind:streamTokens
       bind:selectedRequestType
