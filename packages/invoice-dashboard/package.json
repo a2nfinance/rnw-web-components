@@ -28,12 +28,12 @@
     "!dist/**/*.spec.*"
   ],
   "dependencies": {
-    "@requestnetwork/currency": "^0.16.1-next.2042",
-    "@requestnetwork/payment-detection": "0.42.0",
-    "@requestnetwork/payment-processor": "0.44.0",
-    "@requestnetwork/request-client.js": "^0.47.1-next.2042",
+    "@requestnetwork/payment-detection": "^0.43.1-next.2047",
+    "@requestnetwork/payment-processor": "^0.45.1-next.2047",
+    "@requestnetwork/request-client.js": "^0.47.1-next.2047",
     "@requestnetwork/shared": "^0.4.0",
     "@requestnetwork/web3-signature": "0.5.0",
+    "@superfluid-finance/sdk-core": "^0.7.0",
     "@web3-onboard/core": "^2.21.6",
     "browserify-zlib": "^0.2.0",
     "crypto-browserify": "^3.12.0",

@@ -31,6 +31,8 @@
     export let request: Types.IRequestDataWithEvents | undefined;
     let progress: number = 0;
     let releaseAmount: number = 0;
+    let calculatedReleaseAmount: number = 0;
+    let createdAtTimestamp: number = 0;
     let latestStream: any = null;
     let network = request?.currencyInfo?.network || "mainnet";
     let currencies = getErc777Currencies(network);
@@ -130,7 +132,7 @@
             latestStream = existedStreams.data?.[0];
 
             // Calculate progress percentage
-            let startTime = latestStream.createdAtTimestamp;
+            createdAtTimestamp = latestStream.createdAtTimestamp;
             let flowRate = parseFloat(
                 formatUnits(latestStream.currentFlowRate, currency?.decimals!),
             );
@@ -142,9 +144,10 @@
                     if (progress < 100) {
                         let currentTime = new Date().getTime();
 
-                        if (startTime * 1000 < currentTime) {
-                            let calculatedReleaseAmount =
-                                (flowRate * (currentTime - startTime * 1000)) /
+                        if (createdAtTimestamp * 1000 < currentTime) {
+                            calculatedReleaseAmount =
+                                (flowRate *
+                                    (currentTime - createdAtTimestamp * 1000)) /
                                 1000;
                             releaseAmount =
                                 calculatedReleaseAmount > expectedAmount
@@ -222,7 +225,6 @@
 
     async function switchNetworkIfNeeded(network: string) {
         try {
-            console.log(requestData!);
             const targetNetworkId = String(
                 getNetworkIdFromNetworkName(network),
             );
@@ -323,17 +325,24 @@
         <span style="font-weight: 500;">Invoice Currency:</span>
         {currency?.symbol}
     </h3>
-    <h3 class="invoice-info-payment">
-        <span style="font-weight: 500;">Progress: {progress}%</span>
-    </h3>
-    <div class="progress-bar" style="--progress: {progress}%">
-        <div class="progress">
-            {releaseAmount.toFixed(4)} / {formatUnits(
-                BigInt(request?.expectedAmount.toString() || "0"),
-                currency?.decimals || 18,
-            )}
+
+    {#if streamExisted}
+        <h3 class="invoice-info-payment">
+            <span style="font-weight: 500;">Created At:</span>
+            {new Date(createdAtTimestamp * 1000).toLocaleString()}
+        </h3>
+        <h3 class="invoice-info-payment">
+            <span style="font-weight: 500;">Progress: {progress}%</span>
+        </h3>
+        <div class="progress-bar" style="--progress: {progress}%">
+            <div class="progress">
+                {releaseAmount.toFixed(4)} / {formatUnits(
+                    BigInt(request?.expectedAmount.toString() || "0"),
+                    currency?.decimals || 18,
+                )}
+            </div>
         </div>
-    </div>
+    {/if}
 
     {#if request?.contentData?.invoiceItems}
         <div class="table-container">
