@@ -157,45 +157,14 @@
                     "Extension data must have conversion settings or swap settings",
                 );
             }
-
-            // let tokenHash =
-            //     miscellaneous.conversionSettings.currency.value.toLowerCase();
             let currencyConversion = miscellaneous.conversionSettings.currency;
-
-            // let currencyManager = CurrencyManager.getDefault();
-            // let currency = this.knownCurrencies.
-            // let defaultList = CurrencyManager.getDefaultList();
-            // let tokenInList: any = {};
-            // let indexOfToken: number = 0;
-            // defaultList.forEach((x, index) => {
-            //     if (x.hash.toLowerCase() === tokenHash) {
-            //         tokenInList = x;
-            //         indexOfToken = index;
-            //     }
-            // });
-            // if (tokenInList && indexOfToken) {
-            //     let adjustToken = { ...tokenInList, hash: tokenHash};
-            //     defaultList[indexOfToken] = adjustToken;
-            // }
-
-            // let newManager = new CurrencyManager(
-            //     defaultList,
-            //     CurrencyManager.getDefaultLegacyTokens(),
-            // );
-
-            // console.log("Currency manager:", newManager);
-
             let conversionSettings = {
                 currency: currencyConversion,
-                maxToSpend: utils.MAX_ALLOWANCE,
-                // newManager,
+                maxToSpend: utils.MAX_ALLOWANCE
             };
 
             if (miscellaneous?.swapSettings) {
-                // Need to validate
                 let swapSettings: ISwapSettings = miscellaneous?.swapSettings;
-                // conversionSettings type is IConversionSettings
-                // Swap ERC20 and convert to FIAT to pay.
                 let paymentTx = await await swapToPayAnyToErc20Request(
                     requestData,
                     signer,
@@ -206,14 +175,10 @@
                 );
                 await paymentTx.wait(2);
             } else {
-                console.log("NETWORK:", paymentNetwork);
                 if (
                     paymentNetwork ===
                     Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ERC20_PROXY
                 ) {
-                    console.log("ANY TO ERC20");
-                    // conversionSettings type is IConversionPaymentSettings
-                    // Conversion transaction only
                     let paymentTx = await payAnyToErc20ProxyRequest(
                         requestData,
                         signer,
@@ -224,9 +189,6 @@
                     paymentNetwork ===
                     Types.Extension.PAYMENT_NETWORK_ID.ANY_TO_ETH_PROXY
                 ) {
-                    console.log("ANY TO ETH");
-                    // conversionSettings type is IConversionPaymentSettings
-                    // Conversion transaction only
                     let paymentTx = await payAnyToEthProxyRequest(
                         requestData,
                         signer,
