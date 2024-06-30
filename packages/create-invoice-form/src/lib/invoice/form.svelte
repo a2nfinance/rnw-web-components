@@ -1,17 +1,17 @@
 <script lang="ts">
   import {
-    Accordion,
-    Button,
-    Dropdown,
-    Input,
-    Labels,
-    Plus,
-    Trash,
-    calculateItemTotal,
-    checkAddress,
-    inputDateFormat,
-    type CustomFormData,
-    type IConfig,
+      Accordion,
+      Button,
+      Dropdown,
+      Input,
+      Labels,
+      Plus,
+      Trash,
+      calculateItemTotal,
+      checkAddress,
+      inputDateFormat,
+      type CustomFormData,
+      type IConfig,
   } from "@requestnetwork/shared";
   import { onMount } from "svelte";
 
@@ -425,18 +425,46 @@
 
           <p />
         </div>
+        {#if selectedRequestType === "2"}
+          <div class="invoice-form-help">
+            <span>Currency In: Token A</span>
+            <span>Currency Out: Token B</span>
+            <p>
+              Token A will be swapped for Token B, and the payee will receive
+              Token B.
+            </p>
+          </div>
+        {/if}
+        {#if selectedRequestType === "3"}
+          <div class="invoice-form-help">
+            <p>
+              The fiat amount will be converted to a token amount, and the payee
+              will receive that token amount.
+            </p>
+          </div>
+        {/if}
+        {#if selectedRequestType === "4"}
+          <div class="invoice-form-help">
+            <span>Currency In: Token A</span>
+            <span>Currency Out: Token B</span>
+            <p>
+              The fiat amount will be converted to a Token B amount. Token A
+              will be swapped for Token B, and the payee will receive the
+              corresponding Token B amount.
+            </p>
+          </div>
+        {/if}
+        {#if selectedRequestType === "6"}
+          <div class="invoice-form-help">
+            <p>
+              Continuous payment where a token amount is sent to the receiver's
+              account address periodically.
+            </p>
+          </div>
+        {/if}
         <div class="invoice-form-section">
           {#if selectedRequestType === "2"}
             <!-- Swap token -->
-            <Dropdown
-              {config}
-              placeholder="Select currency in"
-              options={Array.from(currencies.entries()).map(([key, value]) => ({
-                value: key,
-                label: `${value.symbol} (${value.network})`,
-              }))}
-              onchange={handleSwapCurrencyChange}
-            />
             <Input
               id="maxInputAmount"
               type="number"
@@ -444,8 +472,24 @@
               placeholder="Maximum Amount In"
               {handleInput}
             />
+            <Dropdown
+              {config}
+              placeholder="Select currency in"
+              options={Array.from(currencies.entries()).map(([key, value]) => ({
+                value: key,
+                label: `${value.symbol} (${value.network})`,
+              }))}
+              onchange={handleSwapCurrencyChange}
+            />
           {:else if selectedRequestType === "3"}
             <!-- Add conversion -->
+            <Input
+              id="maxInputAmount"
+              type="number"
+              value={formData.maxInputAmount}
+              placeholder="Maximum Spend"
+              {handleInput}
+            />
             <Dropdown
               {config}
               placeholder="Select Fiat currency"
@@ -455,16 +499,15 @@
               ]}
               onchange={handleFiatChange}
             />
+          {:else if selectedRequestType === "4"}
+            <!-- Add conversion -->
             <Input
               id="maxInputAmount"
               type="number"
               value={formData.maxInputAmount}
-              label="Maximum Spend"
-              placeholder="1"
+              placeholder="Maximum Amount In"
               {handleInput}
             />
-          {:else if selectedRequestType === "4"}
-            <!-- Add conversion -->
             <Dropdown
               {config}
               placeholder="Select Fiat currency"
@@ -483,14 +526,6 @@
                 label: `${value.symbol} (${value.network})`,
               }))}
               onchange={handleSwapCurrencyChange}
-            />
-            <Input
-              id="maxInputAmount"
-              type="number"
-              value={formData.maxInputAmount}
-              label="Maximum Amount In"
-              placeholder="1"
-              {handleInput}
             />
           {:else if selectedRequestType === "5"}
             <span></span>
@@ -508,8 +543,7 @@
               id="expectedFlowRate"
               type="number"
               value={formData.expectedFlowRate}
-              label="Expected flow rate"
-              placeholder="0.1"
+              placeholder="Expected flow rate"
               {handleInput}
             />
             <Dropdown
@@ -963,5 +997,16 @@
   }
   .suggestion:hover {
     background-color: whitesmoke;
+  }
+  .invoice-form-help {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid #e4e4e7;
+    border-radius: 6px;
+    padding: 10px 20px 10px 20px;
+    font-size: 12px;
+    background-color: forestgreen;
+    color: whitesmoke;
   }
 </style>
