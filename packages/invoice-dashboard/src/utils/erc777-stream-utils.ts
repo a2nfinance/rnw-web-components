@@ -15,13 +15,6 @@ import {
     type Signer
 } from 'ethers';
 
-interface ICurrency extends Types.RequestLogic.ICurrency {
-    name: string;
-    symbol: string;
-    chainId: number;
-    decimals: number;
-}
-
 // Super fluid configs
 export const spConfigs = new Map<string, { resolverAddress: string }>([
     [
@@ -46,9 +39,8 @@ export const spConfigs = new Map<string, { resolverAddress: string }>([
 
 ]);
 
-// Default library not support custom chains.
-// Not support singleton pattern when creating Framework instance.
-// This custom function does that.
+// The default library does not support custom chains or the singleton pattern when creating a Framework instance.
+// This custom function addresses those issues.
 let rf: Framework;
 
 export async function getSuperFluidFramework(
@@ -58,9 +50,7 @@ export async function getSuperFluidFramework(
     try {
         const resolverAddress = spConfigs.get(request.currencyInfo.network?.toString() || "")?.resolverAddress;
         const chainId = (await provider.getNetwork()).chainId;
-
-        // @ts-ignore
-        if (!rf || (rf.settings.chainId !== chainId)) {
+        if (!rf || (rf.settings?.chainId !== chainId)) {
             rf = await Framework.create({
                 chainId,
                 provider: provider,
@@ -68,7 +58,7 @@ export async function getSuperFluidFramework(
             });
         }
     } catch (e) {
-        console.log("Could not create SuperFluid framework", e);
+        console.log("Could not create the SuperFluid framework instance", e);
     }
     return rf;
 
