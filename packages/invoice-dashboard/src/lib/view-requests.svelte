@@ -4,26 +4,35 @@
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <script lang="ts">
   import {
-    Copy,
-    Input,
-    Search,
-    Dropdown,
-    Skeleton,
-    PoweredBy,
-    ChevronUp,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    type IConfig,
-    config as defaultConfig,
+      checkNetwork,
+      debounce,
+      formatAddress,
+      getDecimals,
+      getRequestType,
+      getSymbol,
+  } from "$src/utils";
+  import type { RequestNetwork } from "@requestnetwork/request-client.js";
+  import { Types } from "@requestnetwork/request-client.js";
+  import {
+      ChevronDown,
+      ChevronLeft,
+      ChevronRight,
+      ChevronUp,
+      Copy,
+      Dropdown,
+      Input,
+      PoweredBy,
+      Search,
+      Skeleton,
+      config as defaultConfig,
+      type IConfig,
+      getErc777Currencies
   } from "@requestnetwork/shared";
+  import type { WalletState } from "@web3-onboard/core";
   import { onMount } from "svelte";
   import { formatUnits } from "viem";
-  import { Drawer, InvoiceView } from "./dashboard";
-  import type { WalletState } from "@web3-onboard/core";
-  import { Types } from "@requestnetwork/request-client.js";
-  import type { RequestNetwork } from "@requestnetwork/request-client.js";
-  import { debounce, getSymbol, getDecimals, formatAddress } from "$src/utils";
+  import { Drawer, InvoiceView, InvoiceViewConversion } from "./dashboard";
+  import InvoiceViewStream from "./dashboard/invoice-view-stream.svelte";
 
   export let config: IConfig;
   export let wallet: WalletState;
@@ -147,7 +156,7 @@
 
   $: paginatedRequests = (filteredRequests ?? []).slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const goToPage = (page: number) => {
@@ -193,7 +202,7 @@
 
   const handleRequestSelect = (
     e: Event,
-    request: Types.IRequestDataWithEvents
+    request: Types.IRequestDataWithEvents,
   ) => {
     activeRequest = request;
   };
@@ -338,7 +347,7 @@
                   scope="col"
                   on:click={() =>
                     handleSort(
-                      currentTab === "Pay" ? "payee.value" : "payer.value"
+                      currentTab === "Pay" ? "payee.value" : "payer.value",
                     )}
                   >{currentTab === "Pay" ? "Payee" : "Payer"}<i
                     class={`caret `}
@@ -355,6 +364,17 @@
                 <div>
                   Expected Amount<i class={`caret `}>
                     {#if sortOrder === "asc" && sortColumn === "expectedAmount"}
+                      <ChevronUp />
+                    {:else}
+                      <ChevronDown />
+                    {/if}
+                  </i>
+                </div>
+              </th>
+              <th on:click={() => handleSort("requestType")}>
+                <div>
+                  Type<i class={`caret `}>
+                    {#if sortOrder === "asc" && sortColumn === "requestType"}
                       <ChevronUp />
                     {:else}
                       <ChevronDown />
@@ -385,7 +405,7 @@
                   {#if columns.issuedAt}
                     <td
                       >{new Date(
-                        request.contentData.creationDate
+                        request.contentData.creationDate,
                       ).toLocaleDateString() || "-"}</td
                     >
                   {/if}
@@ -393,14 +413,14 @@
                     <td
                       >{request?.contentData?.paymentTerms?.dueDate
                         ? new Date(
-                            request?.contentData?.paymentTerms?.dueDate
+                            request?.contentData?.paymentTerms?.dueDate,
                           ).toLocaleDateString()
                         : "-"}</td
                     >
                   {/if}
                   <td
                     >{new Date(
-                      request.timestamp * 1000
+                      request.timestamp * 1000,
                     ).toLocaleDateString()}</td
                   >
                   <td>{request.contentData.invoiceNumber || "-"}</td>
@@ -424,7 +444,7 @@
                           >{formatAddress(
                             currentTab === "Pay"
                               ? request.payee?.value ?? ""
-                              : request.payer?.value ?? ""
+                              : request.payer?.value ?? "",
                           )}</span
                         >
                         <Copy
@@ -436,18 +456,39 @@
                     </td>
                   {/if}
                   <td>
-                    {formatUnits(
-                      BigInt(request.expectedAmount),
-                      getDecimals(
-                        request.currencyInfo.network ?? "",
-                        request.currencyInfo.value
-                      )
-                    )}
-                    {getSymbol(
-                      request.currencyInfo.network ?? "",
-                      request.currencyInfo.value
-                    )}
+                    {#if request.currencyInfo.network}
+                      {#if request.currencyInfo.type === Types.RequestLogic.CURRENCY.ERC20}
+                        {formatUnits(
+                          BigInt(request.expectedAmount),
+                          getDecimals(
+                            request.currencyInfo.network ?? "",
+                            request.currencyInfo.value,
+                          ),
+                        )}
+                        {getSymbol(
+                          request.currencyInfo.network ?? "",
+                          request.currencyInfo.value,
+                        )}
+                      {:else if request.currencyInfo.type === Types.RequestLogic.CURRENCY.ERC777}
+                        {formatUnits(
+                          BigInt(request.expectedAmount),
+                          getErc777Currencies(
+                            request.currencyInfo.network || "",
+                          ).get(
+                            `${checkNetwork(request.currencyInfo.network || "")}_${request.currencyInfo.value}`,
+                          )?.decimals || 18,
+                        )}
+                        {getErc777Currencies(
+                          request.currencyInfo.network || "",
+                        ).get(
+                          `${checkNetwork(request.currencyInfo.network || "")}_${request.currencyInfo.value}`,
+                        )?.symbol}
+                      {/if}
+                    {:else}
+                      {request.expectedAmount} {request.currency}
+                    {/if}
                   </td>
+                  <td> {getRequestType(request)}</td>
                   <td> {checkStatus(request)}</td>
                 </tr>
               {/each}
@@ -458,8 +499,24 @@
           active={activeRequest !== undefined}
           onClose={handleRemoveSelectedRequest}
         >
-          {#if activeRequest !== undefined}
+          {#if activeRequest !== undefined && !activeRequest.contentData?.miscellaneous?.conversionSettings && !activeRequest.contentData?.miscellaneous?.streamSettings}
             <InvoiceView
+              {wallet}
+              {requestNetwork}
+              config={activeConfig}
+              request={activeRequest}
+            />
+          {/if}
+          {#if activeRequest !== undefined && activeRequest.contentData?.miscellaneous?.conversionSettings}
+            <InvoiceViewConversion
+              {wallet}
+              {requestNetwork}
+              config={activeConfig}
+              request={activeRequest}
+            />
+          {/if}
+          {#if activeRequest !== undefined && activeRequest.contentData?.miscellaneous?.streamSettings}
+            <InvoiceViewStream
               {wallet}
               {requestNetwork}
               config={activeConfig}

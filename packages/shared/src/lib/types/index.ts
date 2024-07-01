@@ -24,6 +24,9 @@ export interface CustomFormData {
   items: InvoiceItem[];
   buyerInfo?: SellerBuyerInfo;
   sellerInfo?: SellerBuyerInfo;
+  expectedStartDate?: string,
+  expectedFlowRate?: number,
+  maxInputAmount?: number
 }
 
 export interface SellerBuyerInfo {

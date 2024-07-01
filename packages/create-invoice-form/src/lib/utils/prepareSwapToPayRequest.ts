@@ -3,16 +3,18 @@ import { parseUnits, zeroAddress } from "viem";
 import { generateContentDataRequest } from "./generateContentData";
 import type { IRequestParams } from "./types";
 
-export const prepareRequestParams = ({
+export const prepareSwapToPayRequestParams = ({
   signer,
   currency,
   formData,
   currencies,
   invoiceTotals,
+  swapCurrency
 }: IRequestParams): Types.ICreateRequestParameters => {
-  let generatedContentData = generateContentDataRequest(currency, formData, currencies);
 
+  let generatedContentData = generateContentDataRequest(currency, formData, currencies);
   return {
+
     requestInfo: {
       currency: {
         type: currencies.get(currency)!.type,
@@ -40,11 +42,18 @@ export const prepareRequestParams = ({
         paymentAddress: formData.payeeAddress,
         feeAddress: zeroAddress,
         feeAmount: "0",
-      },
+      }
     },
     contentData: {
-      ...generatedContentData, 
-      miscellaneous: {
+      ...generatedContentData, miscellaneous: {
+        swapSettings: {
+          deadline: 2599732187000, // This test will fail in 2052
+          maxInputAmount: parseUnits(
+            formData.maxInputAmount?.toString() || "1",
+            currencies.get(swapCurrency)!.decimals
+          ).toString(),
+          path: [currencies.get(swapCurrency)!.value, currencies.get(currency)!.value],
+        },
         labels: formData.miscellaneous.labels,
       }
     },
@@ -53,4 +62,4 @@ export const prepareRequestParams = ({
       value: signer,
     },
   }
-}
+};

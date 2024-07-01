@@ -147,3 +147,151 @@ export const getCurrenciesByNetwork = (
   }
   return currencies;
 };
+
+
+
+
+export const erc777Sepolia = new Map<string, ICurrency>([
+  [
+    "11155111_0xb598E6C621618a9f63788816ffb50Ee2862D443B",
+    {
+      name: "Super fUSDC Fake Token",
+      symbol: "fUSDCx",
+      value: "0xb598E6C621618a9f63788816ffb50Ee2862D443B",
+      chainId: 11155111,
+      network: "sepolia",
+      decimals: 18,
+      type: Types.RequestLogic.CURRENCY.ERC777,
+    },
+  ],
+  [
+    "11155111_0x9ce2062b085a2268e8d769ffc040f6692315fd2c",
+    {
+      name: "Super fDAI Fake Token",
+      symbol: "fDAIx",
+      value: "0x9ce2062b085a2268e8d769ffc040f6692315fd2c",
+      chainId: 11155111,
+      network: "sepolia",
+      decimals: 18,
+      type: Types.RequestLogic.CURRENCY.ERC777,
+    },
+  ],
+  ["11155111_0x30a6933ca9230361972e413a15dc8114c952414e",
+    {
+      name: "Super ETH",
+      symbol: "ETHx",
+      value: "0x30a6933ca9230361972e413a15dc8114c952414e",
+      chainId: 11155111,
+      network: "sepolia",
+      decimals: 18,
+      type: Types.RequestLogic.CURRENCY.ERC777,
+    },
+  ],
+]);
+
+export const erc777Mainnet = new Map<string, ICurrency>([
+  [
+
+    "1_0xc22bea0be9872d8b7b3933cec70ece4d53a900da",
+    {
+      name: "ETHx",
+      symbol: "ETHx",
+      value: "0xc22bea0be9872d8b7b3933cec70ece4d53a900da",
+      chainId: 1,
+      network: "mainnet",
+      decimals: 18,
+      type: Types.RequestLogic.CURRENCY.ERC777,
+    },
+
+  ],
+  [
+    "1_0x4f228bf911ed67730e4b51b1f82ac291b49053ee",
+    {
+      name: "Super Dai Stablecoin",
+      symbol: "DAIx",
+      value: "0x4f228bf911ed67730e4b51b1f82ac291b49053ee",
+      chainId: 1,
+      network: "mainnet",
+      decimals: 18,
+      type: Types.RequestLogic.CURRENCY.ERC777,
+    },
+
+  ],
+  [
+    "1_0x1ba8603da702602a8657980e825a6daa03dee93a",
+    {
+      name: "Super USD Coin",
+      symbol: "USDCx",
+      value: "0x1ba8603da702602a8657980e825a6daa03dee93a",
+      chainId: 1,
+      network: "mainnet",
+      decimals: 18,
+      type: Types.RequestLogic.CURRENCY.ERC777,
+    },
+  ]
+]);
+
+
+export const erc777Polygon = new Map<string, ICurrency>([
+  [
+
+    "137_0xfd0577c4707367ff9b637f219388919d3be37592",
+    {
+      name: "Super Gains Network",
+      symbol: "GNSx",
+      value: "0xfd0577c4707367ff9b637f219388919d3be37592",
+      chainId: 137,
+      network: "matic",
+      decimals: 18,
+      type: Types.RequestLogic.CURRENCY.ERC777,
+    },
+  ],
+  [
+    "137_0xfbb291570de4b87353b1e0f586df97a1ed856470",
+    {
+      name: "Super JPY Coin (PoS)",
+      symbol: "GNSx",
+      value: "0xfbb291570de4b87353b1e0f586df97a1ed856470",
+      chainId: 137,
+      network: "matic",
+      decimals: 18,
+      type: Types.RequestLogic.CURRENCY.ERC777,
+    },
+  ],
+  [
+    "137_0xfac83774854237b6e31c4b051b91015e403956d3",
+    {
+      name: "Astro Gold",
+      symbol: "AGOLD",
+      value: "	0xfac83774854237b6e31c4b051b91015e403956d3",
+      chainId: 137,
+      network: "matic",
+      decimals: 18,
+      type: Types.RequestLogic.CURRENCY.ERC777,
+    },
+  ]
+]);
+
+export const getErc777Currencies = (network: string): Map<string, ICurrency> => {
+
+  let streamTokens = new Map();
+
+  switch (network.toLowerCase()) {
+    case "sepolia":
+    case "11155111":
+      streamTokens = erc777Sepolia;
+      break;
+    case "mainnet":
+    case "1":
+      streamTokens = erc777Mainnet;
+      break;
+    case "matic":
+    case "137":
+      streamTokens = erc777Polygon;
+      break;
+    default:
+      streamTokens = erc777Mainnet;
+  }
+  return streamTokens;
+
+}

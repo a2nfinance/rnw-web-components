@@ -15,7 +15,11 @@
     "build:dashboard": "cd packages/invoice-dashboard && npm run build && cd -",
     "build:stakeholder": "cd packages/add-stakeholder && npm run build && cd -",
     "build": "npm run build:shared && npm run build:form && npm run build:dashboard && npm run build:stakeholder",
-    "link:all": "for d in packages/*; do (cd $d && npm link); done",
+    "link:form": "cd packages/create-invoice-form && npm link",
+    "link:dashboard": "cd packages/invoice-dashboard && npm link",
+    "link:shared": "cd packages/shared && npm link",
+    "link:add:stakeholder": "cd packages/add-stakeholder && npm link",
+    "link:all": "for d in (packages/*); do (cd $d && npm link); done",
     "unlink:all": "for d in packages/*; do (cd $d && npm unlink); done"
   },
   "author": "",

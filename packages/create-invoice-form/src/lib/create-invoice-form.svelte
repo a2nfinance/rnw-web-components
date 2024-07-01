@@ -2,21 +2,34 @@
 
 <script lang="ts">
   import {
-    APP_STATUS,
-    getCurrenciesByNetwork,
-    calculateInvoiceTotals,
-    config as defaultConfig,
-    type IConfig,
+      getInitialFormData,
+      prepareConversionRequestParams,
+      prepareEscrowRequestParams,
+      prepareRequestParams,
+      prepareStreamRequestParams,
+      prepareSwapToPayAnyRequestParams,
+      prepareSwapToPayRequestParams,
+  } from "$utils";
+  import type { RequestNetwork } from "@requestnetwork/request-client.js";
+  import type { ICreateRequestParameters } from "@requestnetwork/request-client.js/dist/types";
+  import {
+      APP_STATUS,
+      Button,
+      Modal,
+      Status,
+      calculateInvoiceTotals,
+      config as defaultConfig,
+      getCurrenciesByNetwork,
+      getErc777Currencies,
+      type IConfig,
   } from "@requestnetwork/shared";
   import { InvoiceForm, InvoiceView } from "./invoice";
-  import { Modal, Button, Status } from "@requestnetwork/shared";
-  import { getInitialFormData, prepareRequestParams } from "$utils";
-  import type { RequestNetwork } from "@requestnetwork/request-client.js";
 
   export let config: IConfig;
   export let signer: string = "";
+  export let clientList: any[] = [];
+  export let useQuickBooks: boolean = false;
   export let requestNetwork: RequestNetwork | null | undefined;
-
   let activeConfig = config ? config : defaultConfig;
   let mainColor = activeConfig.colors.main;
   let secondaryColor = activeConfig.colors.secondary;
@@ -38,17 +51,23 @@
   let network = networks[0];
   const handleNetworkChange = (chainId: string) => {
     const selectedNetwork = networks.find(
-      (network) => network.chainId === chainId
+      (network) => network.chainId === chainId,
     );
 
     if (selectedNetwork) {
       network = selectedNetwork;
 
       const newCurrencies = getCurrenciesByNetwork(selectedNetwork.chainId);
+      const newStreamTokens = getErc777Currencies(selectedNetwork.chainId);
 
       currencies = newCurrencies;
+      streamTokens = newStreamTokens;
+
+      console.log(streamTokens);
 
       currency = newCurrencies.keys().next().value;
+      swapCurrency = newCurrencies.keys().next().value;
+      streamToken = newStreamTokens.keys().next().value;
     }
   };
 
@@ -56,10 +75,13 @@
   let appStatus: APP_STATUS[] = [];
   let formData = getInitialFormData();
   let currencies = getCurrenciesByNetwork(network.chainId) || new Map();
+  let streamTokens = getErc777Currencies(network.chainId) || new Map();
 
   $: {
     currencies = getCurrenciesByNetwork(network.chainId);
+    streamTokens = getErc777Currencies(network.chainId);
     currency = currencies.keys().next().value;
+    swapCurrency = currencies.keys().next().value;
   }
   let currency = currencies.keys().next().value;
 
@@ -67,6 +89,17 @@
     currency = value;
   };
 
+  let swapCurrency = currencies.keys().next().value;
+
+  const handleSwapCurrencyChange = (value: string) => {
+    swapCurrency = value;
+  };
+
+  let streamToken = streamTokens.keys().next().value;
+
+  const handleStreamTokenChange = (value: string) => {
+    streamToken = value;
+  };
   let invoiceTotals = {
     amountWithoutTax: 0,
     totalTaxAmount: 0,
@@ -87,7 +120,7 @@
     const hasItems =
       formData.items.length > 0 &&
       formData.items.every(
-        (item) => item.description && item.quantity > 0 && item.unitPrice > 0
+        (item) => item.description && item.quantity > 0 && item.unitPrice > 0,
       );
 
     const addressesAreValid = !payeeAddressError && !clientAddressError;
@@ -120,19 +153,100 @@
     removeAllStatuses();
   };
 
+  let selectedRequestType = "1";
+  const handleRequestTypeChange = (requestType: string) => {
+    selectedRequestType = requestType;
+  };
+
+  let fiat = "USD";
+  const handleFiatChange = (value: string) => {
+    fiat = value;
+  };
+
   const submitForm = async (e: Event) => {
     e.preventDefault();
 
     formData.miscellaneous.builderId = activeConfig?.builderId || "";
     formData.miscellaneous.createdWith = window.location.hostname;
+    console.log("Original request params:");
+    console.log("formData:", formData);
 
-    const requestCreateParameters = prepareRequestParams({
-      signer,
-      formData,
-      currency,
-      currencies,
-      invoiceTotals,
-    });
+    let requestCreateParameters: ICreateRequestParameters;
+
+    switch (selectedRequestType) {
+      case "2": {
+        requestCreateParameters = prepareSwapToPayRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+          swapCurrency,
+        });
+        break;
+      }
+
+      case "3": {
+        requestCreateParameters = prepareConversionRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+          fiat,
+        });
+        break;
+      }
+      case "4": {
+        requestCreateParameters = prepareSwapToPayAnyRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+          swapCurrency,
+          fiat,
+        });
+        break;
+      }
+      case "5": {
+        requestCreateParameters = prepareEscrowRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+        });
+        break;
+      }
+      case "6": {
+        requestCreateParameters = prepareStreamRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+          streamToken,
+          streamTokens,
+        });
+        break;
+      }
+      default:
+        requestCreateParameters = prepareRequestParams({
+          signer,
+          formData,
+          currency,
+          currencies,
+          invoiceTotals,
+        });
+        break;
+    }
+
+    console.log("Prepared request params:");
+    console.log("Request Info:", requestCreateParameters.requestInfo);
+    console.log("Payment Network:", requestCreateParameters.paymentNetwork);
+    console.log("Content Data:", requestCreateParameters.contentData);
+    console.log("End");
 
     if (requestNetwork) {
       try {
@@ -162,11 +276,19 @@
     <InvoiceForm
       bind:formData
       config={activeConfig}
+      bind:useQuickBooks
+      bind:clientList
       bind:currencies
+      bind:streamTokens
+      bind:selectedRequestType
       bind:payeeAddressError
       bind:clientAddressError
+      {handleRequestTypeChange}
       {handleCurrencyChange}
+      {handleFiatChange}
+      {handleSwapCurrencyChange}
       {handleNetworkChange}
+      {handleStreamTokenChange}
       {networks}
     />
     <div class="invoice-view-wrapper">
@@ -174,11 +296,16 @@
         config={activeConfig}
         {currency}
         {network}
+        {swapCurrency}
+        {fiat}
+        {selectedRequestType}
+        {streamToken}
         bind:formData
         bind:canSubmit
         {invoiceTotals}
         {submitForm}
         bind:currencies
+        bind:streamTokens
       />
     </div>
   </div>

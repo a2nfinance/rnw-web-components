@@ -1,29 +1,35 @@
 <script lang="ts">
   import {
+    checkNetwork,
+    getDecimals,
+    getSymbol,
+    walletClientToSigner,
+  } from "$src/utils";
+  import { getPaymentNetworkExtension } from "@requestnetwork/payment-detection";
+  import {
+    Escrow,
+    UnsupportedNetworkError,
+    approveErc20,
+    approveErc20ForSwapToPayIfNeeded,
+    hasApprovalErc20ForSwapToPay,
+    hasErc20Approval,
+    payRequest,
+    swapToPayRequest,
+    type ISwapSettings,
+  } from "@requestnetwork/payment-processor";
+  import {
     Types,
     type RequestNetwork,
   } from "@requestnetwork/request-client.js";
   import {
-    payRequest,
-    approveErc20,
-    hasErc20Approval,
-  } from "@requestnetwork/payment-processor";
-  import { getPaymentNetworkExtension } from "@requestnetwork/payment-detection";
-  import {
-    Check,
-    Button,
     Accordion,
-    formatDate,
+    Button,
+    Check,
     calculateItemTotal,
+    formatDate,
     getCurrenciesByNetwork,
   } from "@requestnetwork/shared";
   import type { WalletState } from "@web3-onboard/core";
-  import {
-    walletClientToSigner,
-    getSymbol,
-    checkNetwork,
-    getDecimals,
-  } from "$src/utils";
   import { formatUnits } from "viem";
 
   export let config;
@@ -34,9 +40,9 @@
   let network = request?.currencyInfo?.network || "mainnet";
   let currencies = getCurrenciesByNetwork(network);
   let currency = currencies.get(
-    `${checkNetwork(network)}_${request?.currencyInfo?.value}`
+    `${checkNetwork(network)}_${request?.currencyInfo?.value}`,
   );
-
+  let swapSettings = request?.contentData?.miscellaneous?.swapSettings;
   let statuses: any = [];
   let isPaid = false;
   let loading = false;
@@ -94,7 +100,7 @@
     network = request?.currencyInfo?.network || "mainnet";
     currencies = getCurrenciesByNetwork(network);
     currency = currencies.get(
-      `${checkNetwork(network)}_${request?.currencyInfo?.value}`
+      `${checkNetwork(network)}_${request?.currencyInfo?.value}`,
     );
   }
 
@@ -102,11 +108,11 @@
     currencyDetails = {
       symbol: getSymbol(
         request?.currencyInfo.network ?? "",
-        request?.currencyInfo.value ?? ""
+        request?.currencyInfo.value ?? "",
       ),
       decimals: getDecimals(
         request?.currencyInfo?.network ?? "",
-        request?.currencyInfo?.value ?? ""
+        request?.currencyInfo?.value ?? "",
       ),
     };
   }
@@ -116,12 +122,15 @@
       unsupportedNetwork = false;
       loading = true;
       const singleRequest = await requestNetwork?.fromRequestId(
-        request!.requestId
+        request!.requestId,
       );
       signer = walletClientToSigner(wallet);
       requestData = singleRequest?.getData();
-      approved = await checkApproval(requestData, signer);
+
       isPaid = requestData?.balance?.balance! >= requestData?.expectedAmount;
+      if (!isPaid) {
+        approved = (await checkApproval(requestData, signer)) ? true : false;
+      }
       loading = false;
     } catch (err: any) {
       loading = false;
@@ -136,12 +145,52 @@
     try {
       loading = true;
       const _request = await requestNetwork?.fromRequestId(
-        requestData?.requestId!
+        requestData?.requestId!,
       );
+      console.log("Request DATA:", requestData);
 
+      let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
+      let miscellaneous = requestData.contentData.miscellaneous;
       statuses = [...statuses, "Waiting for payment"];
-      const paymentTx = await payRequest(requestData, signer);
-      await paymentTx.wait(2);
+      switch (paymentNetwork) {
+        case Types.Extension.PAYMENT_NETWORK_ID.ERC20_FEE_PROXY_CONTRACT: {
+          // Swap ERC20 to ERC20 and pay
+          if (miscellaneous.swapSettings) {
+            let swapSettings: ISwapSettings = miscellaneous.swapSettings;
+            console.log("Swapsettings:", swapSettings);
+            let paymentTx = await swapToPayRequest(
+              requestData,
+              swapSettings,
+              signer,
+            );
+            await paymentTx.wait(2);
+          } else if (miscellaneous.escrowSettings) {
+            statuses = [...statuses, "Pay Escrow Contract"];
+            // FeeAmount is 1 to avoid error "Zero Value"
+            let payEscrowTx = await Escrow.payEscrow(
+              requestData,
+              signer,
+              undefined,
+              1,
+            );
+            await payEscrowTx.wait(2);
+            statuses = [...statuses, "Pay Request from Escrow"];
+            let paymentTx = await Escrow.payRequestFromEscrow(
+              requestData,
+              signer,
+            );
+            await paymentTx.wait(2);
+          } else {
+            // Normal transaction
+            let paymentTx = await payRequest(requestData, signer);
+            await paymentTx.wait(2);
+          }
+          break;
+        }
+
+        default:
+          throw new UnsupportedNetworkError(paymentNetwork);
+      }
 
       statuses = [...statuses, "Payment detected"];
       while (requestData.balance?.balance! < requestData.expectedAmount) {
@@ -161,21 +210,87 @@
   };
 
   const checkApproval = async (requestData: any, signer: any) => {
-    return await hasErc20Approval(requestData!, address!, signer);
+    // Need to check for all payment networks, because each network can have a checking method.
+    let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
+    let miscellaneous = requestData.contentData.miscellaneous;
+    switch (paymentNetwork) {
+      case Types.Extension.PAYMENT_NETWORK_ID.ERC20_FEE_PROXY_CONTRACT: {
+        // Check if actions include swap
+        if (miscellaneous.swapSettings) {
+          return await hasApprovalErc20ForSwapToPay(
+            requestData!,
+            address!,
+            miscellaneous.swapSettings.path[0],
+            signer,
+            // Check use token amount which need to swap to pay
+            1,
+          );
+        } else if (miscellaneous.escrowSettings) {
+          let approvalTx = await Escrow.approveErc20ForEscrow(
+            requestData!,
+            currency?.value || "",
+            signer,
+          );
+
+          await approvalTx.wait(2);
+          return true;
+        } else {
+          // Check if actions include escrow
+          // Check if actions donot include swap & escrow
+          return await hasErc20Approval(requestData!, address!, signer);
+        }
+      }
+      default:
+        throw new UnsupportedNetworkError(paymentNetwork);
+    }
   };
 
   async function approve() {
     try {
       loading = true;
 
-      if (
-        getPaymentNetworkExtension(requestData!)?.id ===
-        Types.Extension.PAYMENT_NETWORK_ID.ERC20_FEE_PROXY_CONTRACT
-      ) {
-        const approvalTx = await approveErc20(requestData!, signer);
-        await approvalTx.wait(2);
-        approved = true;
+      console.log("Request Data in the approval process:", requestData);
+
+      let paymentNetwork = getPaymentNetworkExtension(requestData!)?.id;
+      let miscellaneous = requestData.contentData.miscellaneous;
+      let approvalTx: any;
+      // Need check for these cases:
+      // 0: ERC20_FEE_PROXY_CONTRACT
+      // 1: ANY_TO_ERC20_PROXY
+      // 2: ANY_TO_ETH_PROXY
+      // 3: ERC777_STREAM
+      switch (paymentNetwork) {
+        case Types.Extension.PAYMENT_NETWORK_ID.ERC20_FEE_PROXY_CONTRACT: {
+          // Check swap only
+          if (miscellaneous.swapSettings) {
+            // Need to change to approveErc20ForSwapToPayIfNeeded
+            approvalTx = await approveErc20ForSwapToPayIfNeeded(
+              requestData!,
+              address!,
+              miscellaneous.swapSettings.path[0],
+              signer,
+              1,
+            );
+          } else if (miscellaneous.escrowSettings) {
+            console.log("Approve Escrow Here");
+            // Escrow
+            approvalTx = await Escrow.approveErc20ForEscrow(
+              requestData!,
+              currency?.value || "",
+              signer,
+            );
+          } else {
+            // Normal
+            approvalTx = await approveErc20(requestData!, signer);
+          }
+          await approvalTx.wait(2);
+          approved = true;
+          break;
+        }
+        default:
+          throw new UnsupportedNetworkError(paymentNetwork);
       }
+
       loading = false;
     } catch (err) {
       console.error("Something went wrong while approving ERC20 : ", err);
@@ -185,6 +300,7 @@
 
   async function switchNetworkIfNeeded(network: string) {
     try {
+      console.log(requestData!);
       const targetNetworkId = String(getNetworkIdFromNetworkName(network));
       await wallet?.provider.request({
         method: "wallet_switchEthereumChain",
@@ -209,7 +325,7 @@
   // FIXME: Add rounding functionality
   function truncateNumberString(
     value: string,
-    maxDecimalDigits: number
+    maxDecimalDigits: number,
   ): string {
     const [integerPart, decimalPart] = value.split(".");
     return decimalPart
@@ -268,13 +384,31 @@
     <span style="font-weight: 500;">Payment Chain:</span>
     {currency?.network}
   </h3>
-  <h3 class="invoice-info-payment">
-    <span style="font-weight: 500;">Invoice Currency:</span>
-    {getSymbol(
-      request?.currencyInfo.network ?? "",
-      request?.currencyInfo.value ?? ""
-    )}
-  </h3>
+
+  {#if swapSettings}
+    <h3 class="invoice-info-payment">
+      <span style="font-weight: 500;">Currency In:</span>
+      {getSymbol(
+        request?.currencyInfo.network ?? "",
+        swapSettings?.path[0] ?? "",
+      )}
+    </h3>
+    <h3 class="invoice-info-payment">
+      <span style="font-weight: 500;">Currency out:</span>
+      {getSymbol(
+        request?.currencyInfo.network ?? "",
+        request?.currencyInfo.value ?? "",
+      )}
+    </h3>
+  {:else}
+    <h3 class="invoice-info-payment">
+      <span style="font-weight: 500;">Invoice Currency:</span>
+      {getSymbol(
+        request?.currencyInfo.network ?? "",
+        request?.currencyInfo.value ?? "",
+      )}
+    </h3>
+  {/if}
 
   {#if request?.contentData?.invoiceItems}
     <div class="table-container">
@@ -306,9 +440,9 @@
                   formatUnits(
                     // @ts-expect-error
                     calculateItemTotal(item),
-                    currencyDetails.decimals
+                    currencyDetails.decimals,
                   ),
-                  2
+                  2,
                 )}</td
               >
             </tr>
@@ -350,9 +484,9 @@
                       formatUnits(
                         // @ts-expect-error
                         calculateItemTotal(item),
-                        currencyDetails.decimals
+                        currencyDetails.decimals,
                       ),
-                      2
+                      2,
                     )}</td
                   >
                 </tr>

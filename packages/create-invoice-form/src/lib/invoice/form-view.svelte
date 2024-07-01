@@ -11,6 +11,7 @@
   } from "@requestnetwork/shared";
 
   export let currencies;
+  export let streamTokens;
   export let config: IConfig;
   export let canSubmit = false;
   export let network: {
@@ -19,6 +20,10 @@
   };
   export let formData: CustomFormData;
   export let currency = currencies.keys().next().value;
+  export let fiat = "USD";
+  export let swapCurrency = currencies.keys().next().value;
+  export let selectedRequestType = "1";
+  export let streamToken = streamTokens.key().next().value;
   export let submitForm: (e: Event) => Promise<void>;
   export let invoiceTotals = {
     amountWithoutTax: 0,
@@ -40,7 +45,7 @@
 
   const removeLabel = (index: number) => {
     formData.miscellaneous.labels = formData.miscellaneous.labels.filter(
-      (_: any, i: number) => i !== index
+      (_: any, i: number) => i !== index,
     );
   };
 
@@ -94,7 +99,7 @@
   }
 </script>
 
-<div style="display: flex; flex-direction: column; gap: 30px;">
+<div style="display: flex; flex-direction: column; gap: 30px;" id="invoice-form-view-all">
   <div class="invoice-form-wrapper">
     <div class="invoice-header">
       <div class="invoice-header-left">
@@ -133,7 +138,7 @@
     <div class="invoice-section">
       <p class="invoice-section-title">
         <span>From</span>
-        {formData.payeeAddress}
+        {formData.creatorId}
       </p>
       <div
         class={`invoice-details ${sellerInfo.length > 0 && "invoice-details-active"} `}
@@ -166,10 +171,47 @@
       <span>Payment Chain</span>
       {network.name}
     </p>
+    {#if selectedRequestType === "2" || selectedRequestType === "4"}
+      <p class="invoice-section-title">
+        <span>Currency In</span>
+        {currencies.get(swapCurrency)?.symbol}
+        ({currencies.get(swapCurrency)?.network})
+      </p>
+    {/if}
+
+    {#if selectedRequestType === "6"}
     <p class="invoice-section-title">
-      <span>Invoice Currency</span>
+      <span>Expected Start Date</span>
+      {formData.expectedStartDate? new Date(formData.expectedStartDate).toLocaleString() : new Date().toLocaleString()}
+    </p>
+    <p class="invoice-section-title">
+      <span>Expected Flow Rate</span>
+      {formData.expectedFlowRate ? `${formData.expectedFlowRate} / sec` : "0 / sec"}
+    </p>
+    {/if}
+
+    {#if selectedRequestType === "3"}
+    <p class="invoice-section-title">
+      <span>Currency Out</span>
       {currencies.get(currency)?.symbol}
       ({currencies.get(currency)?.network})
+    </p>
+  {/if}
+    <p class="invoice-section-title">
+      {#if selectedRequestType !== "6"}
+        {#if selectedRequestType !== "3"}
+          <span>Currency Out</span>
+          {currencies.get(currency)?.symbol}
+          ({currencies.get(currency)?.network})
+        {:else}
+          <span>Invoice Currency</span>
+          {fiat}
+        {/if}
+      {:else}
+        <span>Invoice Currency</span>
+        {streamTokens.get(streamToken)?.symbol}
+        ({currencies.get(currency)?.network})
+      {/if}
     </p>
     <p class="invoice-section-title">
       <span>Invoice Type</span>
@@ -179,7 +221,7 @@
       <table class="invoice-table">
         <thead class="invoice-table-header">
           <tr>
-            <th scope="col"> Description </th>
+            <th scope="col"> Description View</th>
             <th scope="col"> Qty </th>
             <th scope="col"> Unit Price </th>
             <th scope="col"> Discount </th>
@@ -220,11 +262,23 @@
         class="invoice-summary-item invoice-summary-item-spaced invoice-summary-item-bold"
       >
         <span>Due: </span>
-        <span
-          >{currencies.get(currency)?.symbol}
-          {" "}
-          {invoiceTotals.totalAmount.toFixed(2)}</span
-        >
+        <span>
+          {#if selectedRequestType !== "6"}
+            {#if selectedRequestType !== "3" && selectedRequestType !== "4"}
+              {currencies.get(currency)?.symbol}
+              {" "}
+              {invoiceTotals.totalAmount.toFixed(2)}
+            {:else}
+              {fiat}
+              {" "}
+              {invoiceTotals.totalAmount.toFixed(2)}
+            {/if}
+          {:else}
+            {streamTokens.get(streamToken)?.symbol}
+            {" "}
+            {invoiceTotals.totalAmount.toFixed(2)}
+          {/if}
+        </span>
       </div>
     </div>
     {#if formData.note}

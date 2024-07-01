@@ -3,7 +3,7 @@ import { parseUnits, zeroAddress } from "viem";
 import { generateContentDataRequest } from "./generateContentData";
 import type { IRequestParams } from "./types";
 
-export const prepareRequestParams = ({
+export const prepareEscrowRequestParams = ({
   signer,
   currency,
   formData,
@@ -11,7 +11,6 @@ export const prepareRequestParams = ({
   invoiceTotals,
 }: IRequestParams): Types.ICreateRequestParameters => {
   let generatedContentData = generateContentDataRequest(currency, formData, currencies);
-
   return {
     requestInfo: {
       currency: {
@@ -45,6 +44,7 @@ export const prepareRequestParams = ({
     contentData: {
       ...generatedContentData, 
       miscellaneous: {
+        escrowSettings: "true",
         labels: formData.miscellaneous.labels,
       }
     },
@@ -53,4 +53,4 @@ export const prepareRequestParams = ({
       value: signer,
     },
   }
-}
+};

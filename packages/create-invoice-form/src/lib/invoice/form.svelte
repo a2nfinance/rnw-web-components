@@ -1,29 +1,37 @@
 <script lang="ts">
   import {
-    Input,
-    Button,
-    Labels,
-    Dropdown,
-    Accordion,
-    inputDateFormat,
-    calculateItemTotal,
-    type IConfig,
-    type CustomFormData,
-    Trash,
-    Plus,
-    checkAddress,
+      Accordion,
+      Button,
+      Dropdown,
+      Input,
+      Labels,
+      Plus,
+      Trash,
+      calculateItemTotal,
+      checkAddress,
+      inputDateFormat,
+      type CustomFormData,
+      type IConfig,
   } from "@requestnetwork/shared";
+  import { onMount } from "svelte";
 
   export let config: IConfig;
   export const invoiceNumber: number = 1;
   export let formData: CustomFormData;
   export let handleCurrencyChange: (value: string) => void;
-
+  export let handleSwapCurrencyChange: (value: string) => void;
   export let handleNetworkChange: (chainId: string) => void;
+  export let handleRequestTypeChange: (requestType: string) => void;
+  export let handleFiatChange: (value: string) => void;
+  export let handleStreamTokenChange: (value: string) => void;
   export let networks;
+  export let selectedRequestType = "1";
   export let currencies = new Map();
+  export let streamTokens = new Map();
   export let payeeAddressError = false;
   export let clientAddressError = false;
+  export let clientList: any[] = [];
+  export let useQuickBooks = false;
 
   let creatorId = "";
 
@@ -86,7 +94,16 @@
 
       (formData.items[itemIndex] as any)[fieldName] = value;
     } else {
-      if (id in formData) {
+      if (id in formData!) {
+        (formData as any)[id] = value;
+      }
+      // Workaround.
+      // This code block to fix an issue: id could not found in formData
+      if (
+        ["expectedStartDate", "expectedFlowRate", "maxInputAmount"].indexOf(
+          id,
+        ) !== -1
+      ) {
         (formData as any)[id] = value;
       }
     }
@@ -110,6 +127,51 @@
   const removeInvoiceItem = (index: number) => {
     formData.items = formData.items.filter((_, i) => i !== index);
   };
+
+  let query = "";
+  let filteredSuggestions: any = [];
+  let showSuggestions = false;
+
+  onMount(() => {
+    filteredSuggestions = clientList;
+  });
+
+  function handleAutoInput(event: Event) {
+    let elm = event.target as HTMLInputElement;
+    let query = elm.value;
+    (formData as any)["payerAddress"] = query;
+    if (query.length > 0) {
+      filteredSuggestions = clientList.filter((item) =>
+        (item.Notes + item.DisplayName + item.PrimaryEmailAddr.Address)
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+      );
+      showSuggestions = true;
+    } else {
+      showSuggestions = false;
+    }
+  }
+
+  function handleSuggestionClick(suggestion: any) {
+    query = suggestion.Notes;
+    (formData as any)["payerAddress"] = query;
+    console.log(suggestion);
+    (formData as any)["buyerInfo"]["firstName"] = suggestion.GivenName;
+    (formData as any)["buyerInfo"]["lastName"] = suggestion.FamilyName;
+    (formData as any)["buyerInfo"]["businessName"] = suggestion.CompanyName;
+    (formData as any)["buyerInfo"]["email"] =
+      suggestion.PrimaryEmailAddr.Address;
+    (formData as any)["buyerInfo"].address["country-name"] =
+      suggestion.BillAddr?.CountrySubDivisionCode;
+    (formData as any)["buyerInfo"].address.locality = suggestion.BillAddr?.City;
+    (formData as any)["buyerInfo"].address.region = suggestion.BillAddr?.City;
+    (formData as any)["buyerInfo"].address["postal-code"] =
+      suggestion.BillAddr?.PostalCode;
+    (formData as any)["buyerInfo"].address["street-address"] =
+      suggestion.BillAddr.Line1;
+    showSuggestions = false;
+    checkClientAddress();
+  }
 </script>
 
 <form class="invoice-form">
@@ -215,15 +277,45 @@
         </div>
 
         <div class="invoice-form-section">
-          <Input
-            label="Client information"
-            id="payerAddress"
-            type="text"
-            value={formData.payerAddress}
-            placeholder="Client Wallet Address"
-            {handleInput}
-            onBlur={checkClientAddress}
-          />
+          {#if useQuickBooks}
+            <div class="autocomplete">
+              <Input
+                label="Client information"
+                id="payerAddress"
+                type="text"
+                value={query}
+                placeholder="Client Wallet Address"
+                handleInput={handleAutoInput}
+                onBlur={checkClientAddress}
+              />
+              <!-- <input type="text" bind:value={query} on:input={handleAutoInput} /> -->
+              {#if showSuggestions}
+                <div class="suggestions">
+                  {#each filteredSuggestions as suggestion}
+                    <div
+                      class="suggestion"
+                      on:click={() => handleSuggestionClick(suggestion)}
+                    >
+                      Name: {suggestion.DisplayName} <br />
+                      Email: {suggestion.PrimaryEmailAddr.Address} <br />
+                      ETH Address: {suggestion.Notes}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {:else}
+            <Input
+              label="Client information"
+              id="payerAddress"
+              type="text"
+              value={formData.payerAddress}
+              placeholder="Client Wallet Address"
+              {handleInput}
+              onBlur={checkClientAddress}
+            />
+          {/if}
+
           {#if clientAddressError}
             <p class="error-address">Please enter a valid Ethereum address</p>
           {/if}
@@ -302,39 +394,198 @@
             </div>
           </Accordion>
         </div>
-        <Dropdown
-          {config}
-          placeholder="Select payment chain"
-          options={networks.map((network) => {
-            return {
-              value: network.chainId,
-              label: network.name,
-            };
-          })}
-          onchange={handleNetworkChange}
-        />
 
-        <Dropdown
-          {config}
-          placeholder="Select a currency"
-          options={Array.from(currencies.entries()).map(([key, value]) => ({
-            value: key,
-            label: `${value.symbol} (${value.network})`,
-          }))}
-          onchange={handleCurrencyChange}
-        />
-        <Input
-          label="Where do you want to receive your payment?"
-          id="payeeAddress"
-          type="text"
-          value={formData.payeeAddress}
-          placeholder="0x..."
-          {handleInput}
-          onBlur={checkPayeeAddress}
-        />
-        {#if payeeAddressError}
-          <p class="error-address">Please enter a valid Ethereum address</p>
+        <div class="invoice-form-section">
+          <legend>Payment information</legend>
+
+          <Dropdown
+            {config}
+            placeholder="Select request type"
+            options={[
+              { label: "Simple request", value: "1" },
+              { label: "Swap-to-Pay Request ", value: "2" },
+              { label: "Conversion Request", value: "3" },
+              { label: "Swap-to-Conversion Request", value: "4" },
+              { label: "Escrow Request", value: "5" },
+              { label: "Stream Request", value: "6" },
+            ]}
+            onchange={handleRequestTypeChange}
+          />
+          <Dropdown
+            {config}
+            placeholder="Select payment chain"
+            options={networks.map((network) => {
+              return {
+                value: network.chainId,
+                label: network.name,
+              };
+            })}
+            onchange={handleNetworkChange}
+          />
+
+          <p />
+        </div>
+        {#if selectedRequestType === "2"}
+          <div class="invoice-form-help">
+            <span>Currency In: Token A</span>
+            <span>Currency Out: Token B</span>
+            <p>
+              Token A will be swapped for Token B, and the payee will receive
+              Token B.
+            </p>
+          </div>
         {/if}
+        {#if selectedRequestType === "3"}
+          <div class="invoice-form-help">
+            <p>
+              The fiat amount will be converted to a token amount, and the payee
+              will receive that token amount.
+            </p>
+          </div>
+        {/if}
+        {#if selectedRequestType === "4"}
+          <div class="invoice-form-help">
+            <span>Currency In: Token A</span>
+            <span>Currency Out: Token B</span>
+            <p>
+              The fiat amount will be converted to a Token B amount. Token A
+              will be swapped for Token B, and the payee will receive the
+              corresponding Token B amount.
+            </p>
+          </div>
+        {/if}
+        {#if selectedRequestType === "6"}
+          <div class="invoice-form-help">
+            <p>
+              Continuous payment where a token amount is sent to the receiver's
+              account address periodically.
+            </p>
+          </div>
+        {/if}
+        <div class="invoice-form-section">
+          {#if selectedRequestType === "2"}
+            <!-- Swap token -->
+            <Input
+              id="maxInputAmount"
+              type="number"
+              value={formData.maxInputAmount}
+              placeholder="Maximum Amount In"
+              {handleInput}
+            />
+            <Dropdown
+              {config}
+              placeholder="Select currency in"
+              options={Array.from(currencies.entries()).map(([key, value]) => ({
+                value: key,
+                label: `${value.symbol} (${value.network})`,
+              }))}
+              onchange={handleSwapCurrencyChange}
+            />
+          {:else if selectedRequestType === "3"}
+            <!-- Add conversion -->
+            <Input
+              id="maxInputAmount"
+              type="number"
+              value={formData.maxInputAmount}
+              placeholder="Maximum Spend"
+              {handleInput}
+            />
+            <Dropdown
+              {config}
+              placeholder="Select Fiat currency"
+              options={[
+                { label: "USD", value: "USD" },
+                { label: "EUR", value: "EUR" },
+              ]}
+              onchange={handleFiatChange}
+            />
+          {:else if selectedRequestType === "4"}
+            <!-- Add conversion -->
+            <Input
+              id="maxInputAmount"
+              type="number"
+              value={formData.maxInputAmount}
+              placeholder="Maximum Amount In"
+              {handleInput}
+            />
+            <Dropdown
+              {config}
+              placeholder="Select Fiat currency"
+              options={[
+                { label: "USD", value: "USD" },
+                { label: "EUR", value: "EUR" },
+              ]}
+              onchange={handleFiatChange}
+            />
+            <!-- Swap token -->
+            <Dropdown
+              {config}
+              placeholder="Select currency in"
+              options={Array.from(currencies.entries()).map(([key, value]) => ({
+                value: key,
+                label: `${value.symbol} (${value.network})`,
+              }))}
+              onchange={handleSwapCurrencyChange}
+            />
+          {:else if selectedRequestType === "5"}
+            <span></span>
+          {:else if selectedRequestType === "6"}
+            <!--Stream-->
+            <Input
+              id="expectedStartDate"
+              type="datetime-local"
+              min={new Date(formData.issuedOn).toLocaleString()}
+              value={formData.expectedStartDate}
+              label="Expected start date"
+              {handleInput}
+            />
+            <Input
+              id="expectedFlowRate"
+              type="number"
+              value={formData.expectedFlowRate}
+              placeholder="Expected flow rate"
+              {handleInput}
+            />
+            <Dropdown
+              {config}
+              placeholder="Select payment currency"
+              options={Array.from(streamTokens.entries()).map(
+                ([key, value]) => ({
+                  value: key,
+                  label: `${value.symbol} (${value.network})`,
+                }),
+              )}
+              onchange={handleStreamTokenChange}
+            />
+          {/if}
+          {#if selectedRequestType !== "6"}
+            <Dropdown
+              {config}
+              placeholder="Select payment currency (currency out)"
+              options={Array.from(currencies.entries()).map(([key, value]) => ({
+                value: key,
+                label: `${value.symbol} (${value.network})`,
+              }))}
+              onchange={handleCurrencyChange}
+            />
+          {/if}
+          <p />
+        </div>
+        <div class="invoice-form-section">
+          <Input
+            label="Where do you want to receive your payment?"
+            id="payeeAddress"
+            type="text"
+            value={formData.payeeAddress}
+            placeholder="0x..."
+            {handleInput}
+            onBlur={checkPayeeAddress}
+          />
+          {#if payeeAddressError}
+            <p class="error-address">Please enter a valid Ethereum address</p>
+          {/if}
+          <p />
+        </div>
       </div>
     </div>
     <div class="invoice-form-dates">
@@ -350,7 +601,7 @@
         type="date"
         min={inputDateFormat(formData.issuedOn)}
         value={inputDateFormat(
-          new Date(new Date(formData.issuedOn).getTime() + 24 * 60 * 60 * 1000)
+          new Date(new Date(formData.issuedOn).getTime() + 24 * 60 * 60 * 1000),
         )}
         label="Due Date"
         {handleInput}
@@ -719,5 +970,43 @@
     ) {
     width: 12px;
     height: 12px;
+  }
+
+  .autocomplete {
+    position: relative;
+    width: 100%;
+  }
+  .suggestions {
+    position: absolute;
+    /* border: 1px solid #ccc; */
+    background: #fff;
+    width: 100%;
+    box-sizing: border-box;
+    z-index: 1000;
+  }
+  .suggestion {
+    font-size: 12px;
+    border: 1px solid whitesmoke;
+    /* background-color: whitesmoke; */
+    border-radius: 5px;
+    box-shadow: 2px 5px 2px whitesmoke;
+    padding: 8px;
+    cursor: pointer;
+    box-sizing: border-box;
+    margin-bottom: 5px;
+  }
+  .suggestion:hover {
+    background-color: whitesmoke;
+  }
+  .invoice-form-help {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid #e4e4e7;
+    border-radius: 6px;
+    padding: 10px 20px 10px 20px;
+    font-size: 12px;
+    background-color: forestgreen;
+    color: whitesmoke;
   }
 </style>
